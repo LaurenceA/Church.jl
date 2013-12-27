@@ -1,0 +1,28 @@
+Publish:
+  Tidy
+    Tests
+  Wrap in module
+
+Generalize:
+  Allow sampling from random functions (constructed via eval/currying?)
+
+Samplers:
+  Add facility for different proposal distribution.
+  sample(dist; proposal= ...)
+
+Optimization:
+  Collapse deterministic functions
+
+Extend libraries:
+  Memoized/infinite vector datastructure?
+  Vectors:
+    IID(dist, dims)
+    Joint(dist1, dist2...)
+    Joint(dists)
+
+Error checking:
+  Det error checking - det.f cannot return SDB.
+
+README
+Construct a sample, assigned to a variable, a.
+a = sample(d::Distribution) 
