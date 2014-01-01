@@ -59,10 +59,25 @@ ma = (3/1)/(1/2^2+1/1)
 @test 0.95*ma < ms < 1.05*ma
 @test 0.95*va < vs < 1.05*va
 
-as = [sample(normal()) for i = 1:2]
-ind1 = sample(bernoulli()) + 1
-ind2 = sample(bernoulli()) + 1
-b = as[ind1]
-c = as[ind2]
+test_mixture() = begin
+    mss = zeros(iter, 2)
+    n = 10
+    data = [randn(n) + 10, randn(n) - 10]
+    ms = [sample(normal(0, 10)) for i = 1:2]
+    ks = [sample(bernoulli()) for i = 1:length(data)]
+    for i = 1:length(data)
+        condition(normal[ms[ks[i]+1]], data[i])
+    end
+    for i = 1:iter
+        mss[i, 1] = value(ms[1])
+        mss[i, 2] = value(ms[2])
+        resample()
+    end
+    mss
+end
+(a, b) = test_mixture()[end, :]
 
-d = b + c
+@test sign(a) != sign(b)
+@test abs(a) > 8
+@test abs(b) > 8
+

@@ -113,6 +113,7 @@ logp(d::ContinuousDistribution, x) = logpdf(d, x)
 logp(d::DiscreteDistribution, x) = logpmf(d, x)
 #old_logp(s::Sample) = s.logp
 
+#If can follow args back to source,
 deps_inner(s::Sample) = Sample[s]
 deps_inner(g::Union(GetIndex, Det)) = vcat(map(deps_inner, g.deps)...)
 deps_outer(s::Sample) = collect(Set(vcat(map(deps_inner, s.deps)...)...))
@@ -121,8 +122,7 @@ deps_outer(s::Sample) = collect(Set(vcat(map(deps_inner, s.deps)...)...))
 resample_inner(s::Sample) = begin
     old_val  = s.value
     deps = deps_outer(s)
-    #Cull dependents.
-    s.deps = deps
+    #s.deps = deps
     old_logp = mapreduce(dep->dep.logp, +, deps)
     s.value  = rand(s.dist)
     new_dists = map(s -> value(s.det), deps)
