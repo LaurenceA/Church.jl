@@ -122,17 +122,22 @@ logp(d::DiscreteDistribution, x) = logpmf(d, x)
 #deps_inner(s::Sample) = Sample[s]
 #deps_inner(g::Union(GetIndex, Det)) = vcat(map(deps_inner, g.deps)...)
 #deps_outer(s::Sample) = collect(Set(vcat(map(deps_inner, s.deps)...)...))
-deps_inner(s::Sample, deps::Vector{Sample}) = begin
+deps_inner(_, s::Sample, deps::Vector{Sample}) = begin
     if !in(s, deps)
         push!(deps, s)
     end
     nothing
 end
-deps_inner(s::Union(Det, GetIndex), deps::Vector{Sample}) =
+deps_inner(_, s::Det, deps::Vector{Sample}) =
     deps_recurse(s, deps)
+deps_inner(origin, s::GetIndex, deps::Vector{Sample}) =
+    if in(origin, s.args) || (origin == s.struct[map(value, s.args)...])
+        deps_recurse(s, deps)
+    end
+
 deps_recurse(s, deps::Vector{Sample}) = begin
     for dep in s.deps
-        deps_inner(dep, deps)
+        deps_inner(s, dep, deps)
     end
     nothing
 end
