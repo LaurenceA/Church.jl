@@ -119,21 +119,38 @@ logp(d::DiscreteDistribution, x) = logpmf(d, x)
 #old_logp(s::Sample) = s.logp
 
 #If can follow args back to source,
-deps_inner(s::Sample) = Sample[s]
-deps_inner(g::Union(GetIndex, Det)) = vcat(map(deps_inner, g.deps)...)
-deps_outer(s::Sample) = collect(Set(vcat(map(deps_inner, s.deps)...)...))
+#deps_inner(s::Sample) = Sample[s]
+#deps_inner(g::Union(GetIndex, Det)) = vcat(map(deps_inner, g.deps)...)
+#deps_outer(s::Sample) = collect(Set(vcat(map(deps_inner, s.deps)...)...))
+deps_inner(s::Sample, deps::Vector{Sample}) = begin
+    if !in(s, deps)
+        push!(deps, s)
+    end
+    nothing
+end
+deps_inner(s::Union(Det, GetIndex), deps::Vector{Sample}) =
+    deps_recurse(s, deps)
+deps_recurse(s, deps::Vector{Sample}) = begin
+    for dep in s.deps
+        deps_inner(dep, deps)
+    end
+    nothing
+end
 
-#goes_back(origin::SDB, dependent::Sample) = true
-#    #origin == dependent.dist
-#goes_back(origin::SDB, dependent::Det) = true
-#    #in(origin, dependent.args)
-#goes_back(origin::SDB, dependent::GetIndex) =
-#    origin == dependent.arg
+goes_back(origin::SDG) = (dependent::SDG) -> goes_back(origin, dependent)
+goes_back(origin::SDG, dependent::Sample) = true
+    #origin == dependent.dist
+goes_back(origin::SDG, dependent::Det) = true
+    #in(origin, dependent.args)
+goes_back(origin::SDG, dependent::GetIndex) =
+    in(origin, dependent.args) || origin == origin.struct[map(value, args...)]
 
 #Propose, accept/reject.
 resample_inner(s::Sample) = begin
     old_val  = s.value
-    deps = deps_outer(s)
+    deps = Sample[]
+    deps_recurse(s, deps)
+    #deps = deps_outer(s)
     #s.deps = deps
     old_logp = mapreduce(dep->dep.logp, +, deps)
     s.value  = rand(s.dist)
