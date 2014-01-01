@@ -1,9 +1,9 @@
 using Base.Test
 using Church
-const iter = 10^5
+const iter = 10^6
 #Geometric distribution
 
-geom() = If(() -> 1+geom(), () -> 1)[sample(bernoulli())]
+geom() = @If(sample(bernoulli()), 1+geom(), 1)
 test_geom() = begin
     a = geom()
     condition(normal[a, 3], 15)
@@ -80,4 +80,4 @@ end
 @test sign(a) != sign(b)
 @test abs(a) > 8
 @test abs(b) > 8
-
+gc_church()

@@ -1,4 +1,4 @@
-export If
+export If, @If
 type If
     f_true::Function
     f_false::Function
@@ -22,4 +22,6 @@ getindex(i::If, cond::Bool) =
         i.val_false
     end
 
-
+macro If(cond, val_true, val_false)
+    esc(:(If(() -> $val_true, () -> $val_false)[$cond]))
+end
