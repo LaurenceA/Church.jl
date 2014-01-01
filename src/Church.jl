@@ -116,12 +116,7 @@ end
 #Don't care whether cdf or pdf is needed.
 logp(d::ContinuousDistribution, x) = logpdf(d, x)
 logp(d::DiscreteDistribution, x) = logpmf(d, x)
-#old_logp(s::Sample) = s.logp
 
-#If can follow args back to source,
-#deps_inner(s::Sample) = Sample[s]
-#deps_inner(g::Union(GetIndex, Det)) = vcat(map(deps_inner, g.deps)...)
-#deps_outer(s::Sample) = collect(Set(vcat(map(deps_inner, s.deps)...)...))
 deps_inner(_, s::Sample, deps::Vector{Sample}) = begin
     if !in(s, deps)
         push!(deps, s)
@@ -133,22 +128,15 @@ deps_inner(_, s::Det, deps::Vector{Sample}) =
 deps_inner(origin, s::GetIndex, deps::Vector{Sample}) =
     if in(origin, s.args) || (origin == s.struct[map(value, s.args)...])
         deps_recurse(s, deps)
+    else
+        splice!(origin.deps, findfirst(x -> x==s, origin.deps))
     end
-
 deps_recurse(s, deps::Vector{Sample}) = begin
     for dep in s.deps
         deps_inner(s, dep, deps)
     end
     nothing
 end
-
-goes_back(origin::SDG) = (dependent::SDG) -> goes_back(origin, dependent)
-goes_back(origin::SDG, dependent::Sample) = true
-    #origin == dependent.dist
-goes_back(origin::SDG, dependent::Det) = true
-    #in(origin, dependent.args)
-goes_back(origin::SDG, dependent::GetIndex) =
-    in(origin, dependent.args) || origin == origin.struct[map(value, args...)]
 
 #Propose, accept/reject.
 resample_inner(s::Sample) = begin
