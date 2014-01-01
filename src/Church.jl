@@ -1,10 +1,8 @@
-#TODO
-#Dynamic dependency finding.
-
 module Church
 using Distributions
 include("If.jl")
-export sample, condition, @branch, value, resample, gc_church, background_sampler, Branch, n_samples, pdf
+
+export sample, condition, value, resample, gc_church, background_sampler, n_samples, pdf
 
 #Types
 type Sample{V}
@@ -38,7 +36,7 @@ WSDG = Union(WeakRef, Sample, Det, GetIndex)
 
 #Store declared samples/branches
 const samples = Array(Union(Sample, WeakRef), 0)
-const nodes = Array(WSDG, 0)
+#const nodes = Array(WSDG, 0)
 
 #Show functions
 import Base.show
@@ -54,7 +52,7 @@ sample(det) = begin
     lp = logp(dist, val)
     s = Sample(det, dist, val, lp, Array(WSDG, 0), false)
     push!(samples, s)
-    push!(nodes, s)
+#    push!(nodes, s)
     add_dep(s, det)
     s
 end
@@ -64,7 +62,7 @@ condition(det, val) = begin
     lp = logp(dist, val)
     s = Sample(det, dist, val, lp, Array(WSDG, 0), false)
     #push!(samples, s)
-    push!(nodes, s)
+#    push!(nodes, s)
     add_dep(s, det)
     s
 end
@@ -72,7 +70,7 @@ import Base.getindex
 #Construct Det
 getindex(f::Function, args...) = begin
     d = Det(f, args, Array(WSDG, 0), false)
-    push!(nodes, d)
+#    push!(nodes, d)
     for arg in args
         add_dep(d, arg)
     end
@@ -81,7 +79,7 @@ end
 #Construct GetIndex
 getindex(struct::Union(Vector, If), arg::SDG) = begin
     g = GetIndex(struct, (arg,), Array(WSDG, 0), false)
-    push!(nodes, g)
+#    push!(nodes, g)
     #Add g as a dependent of struct[arg]
     res = g.struct[map(value, g.args)...]
     add_dep(g, res)
@@ -181,19 +179,19 @@ for op in [+, -, *, /, \, .*, ./, .\]
 end
 
 #GC related functions.
-#weaken(as::Vector) = begin
-#    for i = 1:length(as)
-#        as[i] = WeakRef(as[i])
-#    end
-#    nothing
-#end
-#strengthen(as::Vector) = begin
-#    filter!(x -> x != WeakRef(), as)
-#    for i = 1:length(as)
-#        as[i] = as[i].value
-#    end
-#    nothing
-#end
+weaken(as::Vector) = begin
+    for i = 1:length(as)
+        as[i] = WeakRef(as[i])
+    end
+    nothing
+end
+strengthen(as::Vector) = begin
+    filter!(x -> x != WeakRef(), as)
+    for i = 1:length(as)
+        as[i] = as[i].value
+    end
+    nothing
+end
 #weaken_deps(as::Vector) = begin
 #    for s in as
 #        for i = 1:length(s.deps)
@@ -235,20 +233,20 @@ end
 #    end
 #    nothing
 #end
-#gc_church() = begin
-#    gc_disable()
+gc_church() = begin
+    gc_disable()
 #    weaken_branches()
 #    weaken_deps(samples); weaken_deps(branches)
-#    weaken(samples); weaken(branches)
-#    gc_enable()
-#    gc();gc();gc()
-#    gc_disable()
-#    strengthen(samples); strengthen(branches)
+    weaken(samples)
+    gc_enable()
+    gc()
+    gc_disable()
+    strengthen(samples)
 #    strengthen_deps(samples); strengthen_deps(branches)
 #    strengthen_branches()
-#    gc_enable()
-#end
+    gc_enable()
+end
 #strengthen_if(wr::WeakRef) =
 #    wr == WeakRef() ? uneval : wr.value
-#n_samples() = length(samples)
+n_samples() = length(samples)
 end
