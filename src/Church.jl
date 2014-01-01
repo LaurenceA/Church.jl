@@ -45,7 +45,6 @@ show(io::IO, b::GetIndex) = print(io, "GetIndex")
 
 #Constructors
 import Distributions.sample
-#Unconditioned
 sample(det) = begin
     dist = value(det)
     val = rand(dist)
@@ -56,13 +55,12 @@ sample(det) = begin
     add_dep(s, det)
     s
 end
-#Conditioned
 condition(det, val) = begin
     dist = value(det)
     lp = logp(dist, val)
     s = Sample(det, dist, val, lp, Array(WSDG, 0), false)
     #push!(samples, s)
-#    push!(nodes, s)
+    #push!(nodes, s)
     add_dep(s, det)
     s
 end
@@ -77,13 +75,20 @@ getindex(f::Function, args...) = begin
     d
 end
 #Construct GetIndex
-getindex(struct::Union(Vector, If), arg::SDG) = begin
-    g = GetIndex(struct, (arg,), Array(WSDG, 0), false)
-#    push!(nodes, g)
-    #Add g as a dependent of struct[arg]
-    res = g.struct[map(value, g.args)...]
-    add_dep(g, res)
-    add_dep(g, arg)
+getindex(s, a1, a2, a3, a4::SDG, args...) = 
+    GI(s, a1, a2, a3, a4, args...)
+getindex(s, a1, a2, a3::SDG, args...) = 
+    GI(s, a1, a2, a3, args...)
+getindex(s, a1, a2::SDG, args...) = 
+    GI(s, a1, a2, args...)
+getindex(s, a1::SDG, args...) = 
+    GI(s, a1, args...)
+GI(struct, args...) = begin
+    g = GetIndex(struct, args, Array(WSDG, 0), false)
+    add_dep(g, struct[map(value, args)...])
+    for arg in args
+        add_dep(g, arg)
+    end
     g
 end
 
@@ -117,6 +122,13 @@ logp(d::DiscreteDistribution, x) = logpmf(d, x)
 deps_inner(s::Sample) = Sample[s]
 deps_inner(g::Union(GetIndex, Det)) = vcat(map(deps_inner, g.deps)...)
 deps_outer(s::Sample) = collect(Set(vcat(map(deps_inner, s.deps)...)...))
+
+#goes_back(origin::SDB, dependent::Sample) = true
+#    #origin == dependent.dist
+#goes_back(origin::SDB, dependent::Det) = true
+#    #in(origin, dependent.args)
+#goes_back(origin::SDB, dependent::GetIndex) =
+#    origin == dependent.arg
 
 #Propose, accept/reject.
 resample_inner(s::Sample) = begin
