@@ -1,7 +1,10 @@
+#TODO
+#Dynamic dependency finding.
+
 module Church
 using Distributions
-
-export sample, condition, @branch, value, resample, gc_church, background_sampler, Branch, n_samples
+include("If.jl")
+export sample, condition, @branch, value, resample, gc_church, background_sampler, Branch, n_samples, pdf
 
 #Types
 type Sample{V}
@@ -9,95 +12,90 @@ type Sample{V}
     dist::Distribution
     value::V
     logp::Float64
-    deps::Vector{Union(WeakRef, Sample)}
+    deps::Vector
     conditioned::Bool
 end
-type Branch
-    cond
-    f_true::Function
-    f_false::Function
-    deps::Vector{Union(WeakRef, Sample)}
-    conditioned::Bool
-    val_true
-    val_false
-end
-type Det{F <: Union(Function, DataType), T <: Tuple}
-    f::F
+type Det{T <: Tuple}
+    f::Function
     args::T
+    deps::Vector
+    conditioned::Bool
+end
+type GetIndex{S, T <: Tuple}
+    struct::S
+    args::T
+    deps::Vector
+    conditioned::Bool
 end
 type Uneval
 end
+type NoCondition
+end
 const uneval = Uneval()
-SDB = Union(Sample, Det, Branch)
+SDG = Union(Sample, Det, GetIndex)
+SG = Union(Sample, GetIndex)
+WSDG = Union(WeakRef, Sample, Det, GetIndex)
 
 #Store declared samples/branches
 const samples = Array(Union(Sample, WeakRef), 0)
-const branches = Array(Union(Branch, WeakRef), 0)
+const nodes = Array(WSDG, 0)
 
 #Show functions
 import Base.show
 show(io::IO, s::Sample) = print(io, "Sample", tuple(s.dist, s.value))
-show(io::IO, b::Branch) = print(io, "Branch")
+show(io::IO, b::GetIndex) = print(io, "GetIndex")
 
 #Constructors
 import Distributions.sample
+#Unconditioned
 sample(det) = begin
     dist = value(det)
     val = rand(dist)
     lp = logp(dist, val)
-    s = Sample(det, dist, val, lp, Array(Union(WeakRef, Sample), 0), false)
+    s = Sample(det, dist, val, lp, Array(WSDG, 0), false)
     push!(samples, s)
+    push!(nodes, s)
     add_dep(s, det)
     s
 end
+#Conditioned
 condition(det, val) = begin
     dist = value(det)
     lp = logp(dist, val)
-    s = Sample(det, dist, val, lp, Array(Union(WeakRef, Sample), 0), true)
+    s = Sample(det, dist, val, lp, Array(WSDG, 0), false)
     #push!(samples, s)
+    push!(nodes, s)
     add_dep(s, det)
-    rec_cond(det)
     s
 end
-Branch(cond, f_true::Function, f_false::Function) = begin
-    b = Branch(cond, f_true, f_false, Array(Union(WeakRef, Sample), 0), false, uneval, uneval)
-    push!(branches, b)
-    b
-end
-
-#Set conditioned bit.  Required by condition.
-rec_cond(s::Sample) = begin
-    s.conditioned=true
-    rec_cond(s.det)
-end
-rec_cond(det::Det) =
-    for arg in det.args
-        rec_cond(arg)
+import Base.getindex
+#Construct Det
+getindex(f::Function, args...) = begin
+    d = Det(f, args, Array(WSDG, 0), false)
+    push!(nodes, d)
+    for arg in args
+        add_dep(d, arg)
     end
-rec_cond(b::Branch) = begin
-    b.conditioned = true
-    rec_cond(b.cond)
-    rec_cond(b.val_true)
-    rec_cond(b.val_false)
+    d
 end
-rec_cond(any) = nothing
+#Construct GetIndex
+getindex(struct::Union(Vector, If), arg::SDG) = begin
+    g = GetIndex(struct, (arg,), Array(WSDG, 0), false)
+    push!(nodes, g)
+    #Add g as a dependent of struct[arg]
+    res = g.struct[map(value, g.args)...]
+    add_dep(g, res)
+    add_dep(g, arg)
+    g
+end
 
 #Make the sample that you're currently creating a dependent of previous samples.
 #Required by sample and condition.
-add_dep(s::Sample, arg::Sample) = push!(arg.deps, s)
-add_dep(s::Sample, det::Det) = 
-    for arg in det.args
-        add_dep(s, arg)
+add_dep(s::SDG, arg::SDG) =
+    if !in(s, arg.deps)
+        push!(arg.deps, s)
     end
-add_dep(s::Sample, b::Branch) = begin
-    #Add s as a dependent of the currently existing nodes
-    add_dep(s, b.cond)
-    add_dep(s, b.val_true)
-    add_dep(s, b.val_false)
-    #Add s as a dependent of the Branch.
-    push!(b.deps, s)
-end
-add_dep(s::Sample, arg) = nothing
+add_dep(s::SDG, arg) = nothing
 
 #Get the value of an expression.
 value(det::Det) = begin
@@ -105,40 +103,28 @@ value(det::Det) = begin
 end
 value(s::Sample) = s.value
 value(s) = s
-value(b::Branch) =
-    if bool(value(b.cond))
-        if isa(b.val_true, Uneval)
-            b.val_true = b.f_true()
-            #Add dependents to new nodes
-            map(s -> add_dep(s, b.val_true), b.deps)
-            #Add conditioning if conditioned
-            if b.conditioned
-                rec_cond(b.val_true)
-            end
-        end
-        value(b.val_true)
-    else
-        if isa(b.val_false, Uneval)
-            b.val_false = b.f_false()
-            #Add dependents to new nodes
-            map(s -> add_dep(s, b.val_false), b.deps)
-            #Adding conditioning if conditioned
-            if b.conditioned
-                rec_cond(b.val_false)
-            end
-        end
-        value(b.val_false)
-    end
+value(g::GetIndex) = begin
+    res = g.struct[map(value, g.args)...]
+    #Add g as a dependent of struct [arg]
+    add_dep(g, res)
+    value(res)
+end
 
 #Don't care whether cdf or pdf is needed.
 logp(d::ContinuousDistribution, x) = logpdf(d, x)
 logp(d::DiscreteDistribution, x) = logpmf(d, x)
 #old_logp(s::Sample) = s.logp
 
+deps_inner(s::Sample) = Sample[s]
+deps_inner(g::Union(GetIndex, Det)) = vcat(map(deps_inner, g.deps)...)
+deps_outer(s::Sample) = collect(Set(vcat(map(deps_inner, s.deps)...)...))
+
 #Propose, accept/reject.
 resample_inner(s::Sample) = begin
     old_val  = s.value
-    deps = s.deps
+    deps = deps_outer(s)
+    #Cull dependents.
+    s.deps = deps
     old_logp = mapreduce(dep->dep.logp, +, deps)
     s.value  = rand(s.dist)
     new_dists = map(s -> value(s.det), deps)
@@ -168,98 +154,101 @@ background_sampler() =
         tic()
         resample()
         sleep(0.001)
-        if rand() < toq()
-            gc_church()
-        end
+#        if rand() < toq()
+#            gc_church()
+#        end
     end
 
 #Sugar
-#Allow construction of Det by f[sample()] syntax.  Breaks Float64[]
-import Base.getindex
-getindex(f::Function, args...) = Det(f, args)
-getindex(dist::DataType, args...) = Det(dist, args)
-
-#Use a macro to construct a branch
-macro branch(cond, val_true, val_false)
-    esc(:(Branch($cond, () -> $val_true, () -> $val_false)))
+#Two alternatives to allow construction of Distributions.
+#Use getindex directly on the datatype, breaks array construction syntax!
+#getindex{D<:Distribution}(dist::Type{D}, args...) = Det(dist, args)
+#Define (and export) a function for each distribution!
+for dist in filter!(isleaftype, subtypes(Distribution))
+    tsym = symbol(string(dist))
+    fsym = symbol(lowercase(string(dist)))
+    eval(quote 
+        $fsym(args...) = $tsym(args...)
+    end)
+    eval(parse("export $(string(fsym))"))
 end
 
 #Operators construct a Det if called with a sample.
 for op in [+, -, *, /, \, .*, ./, .\]
-    op(a::SDB, b::SDB) = Det(op, (a, b))
-    op(a::SDB, b) = Det(op, (a, b))
-    op(a, b::SDB) = Det(op, (a, b))
+    op(a::SDG, b::SDG) = op[a, b]
+    op(a::SDG, b) = op[a, b]
+    op(a, b::SDG) = op[a, b]
 end
 
 #GC related functions.
-weaken(as::Vector) = begin
-    for i = 1:length(as)
-        as[i] = WeakRef(as[i])
-    end
-    nothing
-end
-strengthen(as::Vector) = begin
-    filter!(x -> x != WeakRef(), as)
-    for i = 1:length(as)
-        as[i] = as[i].value
-    end
-    nothing
-end
-weaken_deps(as::Vector) = begin
-    for s in as
-        for i = 1:length(s.deps)
-            if !s.deps[i].conditioned
-                s.deps[i] = WeakRef(s.deps[i])
-            end
-        end
-    end
-    nothing
-end
-strengthen_deps(as::Vector) = begin
-    for s in as
-        filter!(x -> x != WeakRef(), s.deps)
-        for i = 1:length(s.deps)
-            if isa(s.deps[i], WeakRef)
-                s.deps[i] = s.deps[i].value
-            end
-        end
-    end
-    nothing
-end
-weaken_branches() = begin
-    for b in branches
-        if bool(value(b.cond))
-            b.val_false = WeakRef(b.val_false)
-        else
-            b.val_true = WeakRef(b.val_true)
-        end
-    end
-    nothing
-end
-strengthen_branches() = begin
-    for branch in branches
-        if bool(value(branch.cond))
-            branch.val_false = strengthen_if(branch.val_false)
-        else
-            branch.val_true = strengthen_if(branch.val_true)
-        end
-    end
-    nothing
-end
-gc_church() = begin
-    gc_disable()
-    weaken_branches()
-    weaken_deps(samples); weaken_deps(branches)
-    weaken(samples); weaken(branches)
-    gc_enable()
-    gc();gc();gc()
-    gc_disable()
-    strengthen(samples); strengthen(branches)
-    strengthen_deps(samples); strengthen_deps(branches)
-    strengthen_branches()
-    gc_enable()
-end
-strengthen_if(wr::WeakRef) =
-    wr == WeakRef() ? uneval : wr.value
-n_samples() = length(samples)
+#weaken(as::Vector) = begin
+#    for i = 1:length(as)
+#        as[i] = WeakRef(as[i])
+#    end
+#    nothing
+#end
+#strengthen(as::Vector) = begin
+#    filter!(x -> x != WeakRef(), as)
+#    for i = 1:length(as)
+#        as[i] = as[i].value
+#    end
+#    nothing
+#end
+#weaken_deps(as::Vector) = begin
+#    for s in as
+#        for i = 1:length(s.deps)
+#            if !s.deps[i].conditioned
+#                s.deps[i] = WeakRef(s.deps[i])
+#            end
+#        end
+#    end
+#    nothing
+#end
+#strengthen_deps(as::Vector) = begin
+#    for s in as
+#        filter!(x -> x != WeakRef(), s.deps)
+#        for i = 1:length(s.deps)
+#            if isa(s.deps[i], WeakRef)
+#                s.deps[i] = s.deps[i].value
+#            end
+#        end
+#    end
+#    nothing
+#end
+#weaken_branches() = begin
+#    for b in branches
+#        if bool(value(b.cond))
+#            b.val_false = WeakRef(b.val_false)
+#        else
+#            b.val_true = WeakRef(b.val_true)
+#        end
+#    end
+#    nothing
+#end
+#strengthen_branches() = begin
+#    for branch in branches
+#        if bool(value(branch.cond))
+#            branch.val_false = strengthen_if(branch.val_false)
+#        else
+#            branch.val_true = strengthen_if(branch.val_true)
+#        end
+#    end
+#    nothing
+#end
+#gc_church() = begin
+#    gc_disable()
+#    weaken_branches()
+#    weaken_deps(samples); weaken_deps(branches)
+#    weaken(samples); weaken(branches)
+#    gc_enable()
+#    gc();gc();gc()
+#    gc_disable()
+#    strengthen(samples); strengthen(branches)
+#    strengthen_deps(samples); strengthen_deps(branches)
+#    strengthen_branches()
+#    gc_enable()
+#end
+#strengthen_if(wr::WeakRef) =
+#    wr == WeakRef() ? uneval : wr.value
+#n_samples() = length(samples)
 end

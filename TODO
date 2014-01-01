@@ -1,7 +1,9 @@
 Publish:
   Tidy
     Tests
-  Wrap in module
+
+Memoize:
+  Based on MCMC chain state (indicated by rand(Int64)).
 
 Generalize:
   Allow sampling from random functions (constructed via eval/currying?)
