@@ -1,6 +1,7 @@
 module Church
 using Distributions
 include("If.jl")
+include("Mem.jl")
 
 export sample, condition, value, resample, gc_church, background_sampler, n_samples, pdf
 
@@ -11,32 +12,26 @@ type Sample{V}
     value::V
     logp::Float64
     deps::Vector
-    conditioned::Bool
 end
 type Det{T <: Tuple}
     f::Function
     args::T
     deps::Vector
-    conditioned::Bool
 end
 type GetIndex{S, T <: Tuple}
     struct::S
     args::T
     deps::Vector
-    conditioned::Bool
 end
-type Uneval
-end
-type NoCondition
-end
-const uneval = Uneval()
 SDG = Union(Sample, Det, GetIndex)
-SG = Union(Sample, GetIndex)
+SD = Union(Sample, Det)
 WSDG = Union(WeakRef, Sample, Det, GetIndex)
 
 #Store declared samples/branches
 const samples = Array(Union(Sample, WeakRef), 0)
-#const nodes = Array(WSDG, 0)
+const dets = Array(Union(Det, WeakRef), 0)
+const getindexes = Array(Union(GetIndex, WeakRef), 0)
+const conditions = Array(Union(Sample, WeakRef), 0)
 
 #Show functions
 import Base.show
@@ -49,26 +44,23 @@ sample(det) = begin
     dist = value(det)
     val = rand(dist)
     lp = logp(dist, val)
-    s = Sample(det, dist, val, lp, Array(WSDG, 0), false)
+    s = Sample(det, dist, val, lp, Array(WSDG, 0))
     push!(samples, s)
-#    push!(nodes, s)
     add_dep(s, det)
     s
 end
 condition(det, val) = begin
     dist = value(det)
     lp = logp(dist, val)
-    s = Sample(det, dist, val, lp, Array(WSDG, 0), false)
-    #push!(samples, s)
-    #push!(nodes, s)
+    s = Sample(det, dist, val, lp, Array(WSDG, 0))
     add_dep(s, det)
     s
 end
 import Base.getindex
 #Construct Det
 getindex(f::Function, args...) = begin
-    d = Det(f, args, Array(WSDG, 0), false)
-#    push!(nodes, d)
+    d = Det(f, args, Array(WSDG, 0))
+    push!(dets, d)
     for arg in args
         add_dep(d, arg)
     end
@@ -84,7 +76,8 @@ getindex(s, a1, a2::SDG, args...) =
 getindex(s, a1::SDG, args...) = 
     GI(s, a1, args...)
 GI(struct, args...) = begin
-    g = GetIndex(struct, args, Array(WSDG, 0), false)
+    g = GetIndex(struct, args, Array(WSDG, 0))
+    push!(getindexes, g)
     add_dep(g, struct[map(value, args)...])
     for arg in args
         add_dep(g, arg)
@@ -128,12 +121,26 @@ deps_inner(_, s::Det, deps::Vector{Sample}) =
 deps_inner(origin, s::GetIndex, deps::Vector{Sample}) =
     if in(origin, s.args) || (origin == s.struct[map(value, s.args)...])
         deps_recurse(s, deps)
-    else
-        splice!(origin.deps, findfirst(x -> x==s, origin.deps))
     end
 deps_recurse(s, deps::Vector{Sample}) = begin
     for dep in s.deps
         deps_inner(s, dep, deps)
+    end
+    nothing
+end
+
+#check_dep(origin::SDG) = (dependent) -> check_dep(origin, dependent)
+#check_dep(origin::SDG, dependent::Union(Sample, Det)) = begin
+#    @assert in(origin, depdendent.args)
+#    true
+#end
+#check_dep(origin::SDG, dependent::GetIndex) =
+#    in(origin, dependent.args) || (origin == dependent.struct[map(value, dependent.args)...])
+remove_deps(origin::SDG) =
+    filter!(x -> isdependent(origin, x), origin.deps)
+remove_deps(as::Vector) = begin
+    for a in as
+        remove_deps(a)
     end
     nothing
 end
@@ -143,8 +150,6 @@ resample_inner(s::Sample) = begin
     old_val  = s.value
     deps = Sample[]
     deps_recurse(s, deps)
-    #deps = deps_outer(s)
-    #s.deps = deps
     old_logp = mapreduce(dep->dep.logp, +, deps)
     s.value  = rand(s.dist)
     new_dists = map(s -> value(s.det), deps)
@@ -174,11 +179,10 @@ background_sampler() =
         tic()
         resample()
         sleep(0.001)
-#        if rand() < toq()
-#            gc_church()
-#        end
+        if rand() < toq()
+            gc_church()
+        end
     end
-
 #Sugar
 #Two alternatives to allow construction of Distributions.
 #Use getindex directly on the datatype, breaks array construction syntax!
@@ -214,61 +218,96 @@ strengthen(as::Vector) = begin
     end
     nothing
 end
-#weaken_deps(as::Vector) = begin
-#    for s in as
-#        for i = 1:length(s.deps)
-#            if !s.deps[i].conditioned
-#                s.deps[i] = WeakRef(s.deps[i])
-#            end
-#        end
-#    end
-#    nothing
-#end
-#strengthen_deps(as::Vector) = begin
-#    for s in as
-#        filter!(x -> x != WeakRef(), s.deps)
-#        for i = 1:length(s.deps)
-#            if isa(s.deps[i], WeakRef)
-#                s.deps[i] = s.deps[i].value
-#            end
-#        end
-#    end
-#    nothing
-#end
-#weaken_branches() = begin
-#    for b in branches
-#        if bool(value(b.cond))
-#            b.val_false = WeakRef(b.val_false)
-#        else
-#            b.val_true = WeakRef(b.val_true)
-#        end
-#    end
-#    nothing
-#end
-#strengthen_branches() = begin
-#    for branch in branches
-#        if bool(value(branch.cond))
-#            branch.val_false = strengthen_if(branch.val_false)
-#        else
-#            branch.val_true = strengthen_if(branch.val_true)
-#        end
-#    end
-#    nothing
-#end
+weaken_deps(sdgs::Vector) = begin
+    for s in sdgs
+        for i = 1:length(s.deps)
+            s.deps[i] = WeakRef(s.deps[i])
+        end
+    end
+    nothing
+end
+strengthen_deps(sdgs::Vector) = begin
+    for s in sdgs
+        filter!(x -> x != WeakRef(), s.deps)
+        for i = 1:length(s.deps)
+            if isa(s.deps[i], WeakRef)
+                s.deps[i] = s.deps[i].value
+            end
+        end
+    end
+    nothing
+end
+weaken_getindexes() = begin
+    for g in getindexes
+        weaken(g.struct)
+    end
+    nothing
+end
+strengthen_getindexes() = begin
+    for g in getindexes
+        strengthen(g.struct)
+    end
+    nothing
+end
+
+wr_value(wr::WeakRef) = wr.value
+wr_value(sr) = sr
+
+isdependent(parent::SDG, child::Sample)   = parent == child.det
+isdependent(parent::SDG, child::Det)      = in(parent, child.args)
+isdependent(parent::SDG, child::GetIndex) = 
+    in(parent, child.args) || (parent == child.struct[map(value, child.args)...])
+
+args(s::Sample) = s.det
+args(d::Det) = d.args
+args(g::GetIndex) = 
+    SDG[g.args, (parent == g.struct[map(value, g.args)...])]
+
+condition_rec(parent::SDG, child::SDG) = begin
+    @assert isdependent(parent, child.args)
+    i = findfirst(x -> x==wr_value(child), deps)
+    if isa(parent.deps[i], WeakRef)
+        parent.deps[i] = parent.deps[i].value
+        for g_parent in args(parent)
+            condition_rec(g_parent, parent)
+        end
+    end
+    nothing
+end
+condition_rec(cond::Sample) = begin
+    for arg in cond.args
+        condition_rec(arg, cond)
+    end
+    nothing
+end
+condition_rec() = begin
+    for cond in conditions
+        condition_rec(cond)
+    end
+    nothing
+end
+
+apply_to_sdg(f::Function) = begin
+    f(samples)
+    f(dets)
+    f(getindexes)
+    f(conditions)
+end
 gc_church() = begin
+    #Remove redundant dependencies.
+    apply_to_sdg(remove_deps)
     gc_disable()
-#    weaken_branches()
-#    weaken_deps(samples); weaken_deps(branches)
-    weaken(samples)
+    weaken_getindexes()
+    apply_to_sdg(weaken_deps)
+    condition_rec()
+    apply_to_sdg(weaken)
     gc_enable()
     gc()
     gc_disable()
-    strengthen(samples)
-#    strengthen_deps(samples); strengthen_deps(branches)
-#    strengthen_branches()
+    apply_to_sdg(strengthen)
+    apply_to_sdg(strengthen_deps)
+    strengthen_getindexes()
     gc_enable()
 end
-#strengthen_if(wr::WeakRef) =
-#    wr == WeakRef() ? uneval : wr.value
 n_samples() = length(samples)
 end

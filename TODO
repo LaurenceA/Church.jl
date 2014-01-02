@@ -1,9 +1,15 @@
-Publish:
-  Tidy
-    Tests
+GC
+  Check deps are correct.
+  Weaken all deps.
+  Go recursively back from each condition, strengthening deps.
 
-Memoize:
-  Based on MCMC chain state (indicated by rand(Int64)).
+Tests
+
+Optimization:
+Dynamic dependency graph?
+  Every node has:
+    static_deps
+    dynamic_deps
 
 Generalize:
   Allow sampling from random functions (constructed via eval/currying?)
