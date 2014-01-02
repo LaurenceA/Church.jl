@@ -1,7 +1,5 @@
 module Church
 using Distributions
-include("If.jl")
-include("Mem.jl")
 
 export sample, condition, value, resample, gc_church, background_sampler, n_samples, pdf
 
@@ -75,6 +73,8 @@ getindex(s, a1, a2::SDG, args...) =
     GI(s, a1, a2, args...)
 getindex(s, a1::SDG, args...) = 
     GI(s, a1, args...)
+getindex(s, a1::SDG) = 
+    GI(s, a1)
 GI(struct, args...) = begin
     g = GetIndex(struct, args, Array(WSDG, 0))
     push!(getindexes, g)
@@ -178,7 +178,7 @@ background_sampler() =
     @async while true
         tic()
         resample()
-        sleep(0.001)
+        sleep(1E-6)
         if rand() < toq()
             gc_church()
         end
@@ -205,13 +205,13 @@ for op in [+, -, *, /, \, .*, ./, .\]
 end
 
 #GC related functions.
-weaken(as::Vector) = begin
+weaken_store(as::Vector) = begin
     for i = 1:length(as)
         as[i] = WeakRef(as[i])
     end
     nothing
 end
-strengthen(as::Vector) = begin
+strengthen_store(as::Vector) = begin
     filter!(x -> x != WeakRef(), as)
     for i = 1:length(as)
         as[i] = as[i].value
@@ -300,14 +300,15 @@ gc_church() = begin
     weaken_getindexes()
     apply_to_sdg(weaken_deps)
     condition_rec()
-    apply_to_sdg(weaken)
+    apply_to_sdg(weaken_store)
     gc_enable()
     gc()
     gc_disable()
-    apply_to_sdg(strengthen)
+    apply_to_sdg(strengthen_store)
     apply_to_sdg(strengthen_deps)
     strengthen_getindexes()
     gc_enable()
 end
 n_samples() = length(samples)
+include("datastructures.jl")
 end

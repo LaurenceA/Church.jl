@@ -1,0 +1,107 @@
+#Don't weaken arrays or dicts
+weaken(a::Array) = nothing
+strengthen(a::Array) = nothing
+weaken(d::Dict) = nothing
+strengthen(d::Dict) = nothing
+
+#If
+export If, @If
+type If
+    f_true::Function
+    f_false::Function
+    val_true
+    val_false
+    If(f1::Function, f2::Function) = new(f1, f2, uneval, uneval)
+end
+
+type Uneval
+end
+const uneval = Uneval()
+
+import Base.getindex
+getindex(i::If, cond::Int) = getindex(i, bool(cond))
+getindex(i::If, cond::Bool) =
+    if cond
+        if isa(i.val_true, Uneval)
+            i.val_true = i.f_true()
+        end
+        i.val_true
+    else
+        if isa(i.val_false, Uneval)
+            i.val_false = i.f_false()
+        end
+        i.val_false
+    end
+
+macro If(cond, val_true, val_false)
+    esc(:(If(() -> $val_true, () -> $val_false)[$cond]))
+end
+
+weaken(i::If) = begin
+    i.val_true = WeakRef(i.val_true)
+    i.val_false = WeakRef(i.val_false)
+end
+strengthen(wr::WeakRef) = (wr == WeakRef()) ? uneval : wr.value
+strengthen(i::If) = begin
+    i.val_true = strengthen(i.val_true)
+    i.val_false = strengthen(i.val_false)
+end
+
+export Mem#, InfiniteVector
+
+#type InfiniteVector{T}
+#    vec::Vector{T}
+#    defined::Vector{Bool}
+#end
+#InfiniteVector{T}() = InfiniteVector(Array(T, 0), Array(Bool, 0))
+#InfiniteVector() = InfiniteVector(Array(Any, 0), Array(Bool, 0))
+#getindex(iv::InfiniteVector, i::Int) = begin
+#    if length(iv.vec) < i || !iv.defined[i]
+#        error("Index not defined in InfiniteVector")
+#    end
+#    iv.vec[i]
+#end
+#setindex!(iv::InfiniteVector, val, i::Int) = begin
+#    while length(iv.vec) < i
+#        old_vec = iv.vec
+#        iv.vec = Array(eltype(iv.vec), length(old_vec))
+#        append!(iv.vec, Array(eltype(iv.vec), i - length(iv.vec)))
+#        append!(iv.defined, fill(false, i - length(iv.defined)))
+#    end
+#    iv.defined[i] = true
+#    iv.vec[i] = val
+#end
+#import Base.haskey
+#haskey(iv::InfiniteVector, i::Int) = begin
+#    @assert length(iv.vec) == length(iv.defined)
+#    length(iv.vec) >= i && iv.defined[i]
+#end
+
+type Mem{D}
+    f::Function
+    dict::D
+end
+import Base.getindex
+getindex(m::Mem, args...) = begin
+    if !haskey(m.dict, args)
+        m.dict[args] = m.f(args...)
+    end
+    m.dict[args]
+end
+#Need to do something here!
+weaken(m::Mem) = begin
+    for key in keys(m.dict)
+        m.dict[key] = WeakRef(m.dict[key])
+    end
+    nothing
+end
+strengthen(m::Mem) = begin
+    for key in keys(m.dict)
+        val = m.dict[key]
+        if val == WeakRef()
+            delete!(m.dict, key)
+        else
+            m.dict[key] = m.dict[key].value
+        end
+    end
+end

@@ -1,9 +1,5 @@
 GC
-  Check deps are correct.
-  Weaken all deps.
-  Go recursively back from each condition, strengthening deps.
-
-Tests
+  Strenthen link from getindex -> its dependent.
 
 Optimization:
 Dynamic dependency graph?
@@ -11,15 +7,12 @@ Dynamic dependency graph?
     static_deps
     dynamic_deps
 
-Generalize:
-  Allow sampling from random functions (constructed via eval/currying?)
-
 Samplers:
   Add facility for different proposal distribution.
   sample(dist; proposal= ...)
 
 Optimization:
-  Collapse deterministic functions
+  Collapse deterministic functions?
 
 Extend libraries:
   Memoized/infinite vector datastructure?
