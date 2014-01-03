@@ -1,6 +1,8 @@
 #Don't weaken arrays or dicts
+isweak(a::Array) = false
 weaken(a::Array) = nothing
 strengthen(a::Array) = nothing
+isweak(d::Dict) = false
 weaken(d::Dict) = nothing
 strengthen(d::Dict) = nothing
 
@@ -37,6 +39,7 @@ macro If(cond, val_true, val_false)
     esc(:(If(() -> $val_true, () -> $val_false)[$cond]))
 end
 
+isweak(i::If) = isa(i.val_true, WeakRef)
 weaken(i::If) = begin
     i.val_true = WeakRef(i.val_true)
     i.val_false = WeakRef(i.val_false)
@@ -89,6 +92,10 @@ getindex(m::Mem, args...) = begin
     m.dict[args]
 end
 #Need to do something here!
+#isweak(m::Mem) = isa(first(m.dict)[2], WeakRef)
+isweak(m::Mem) = begin
+    isa(first(m.dict)[2], WeakRef)
+end
 weaken(m::Mem) = begin
     for key in keys(m.dict)
         m.dict[key] = WeakRef(m.dict[key])
@@ -96,12 +103,12 @@ weaken(m::Mem) = begin
     nothing
 end
 strengthen(m::Mem) = begin
-    for key in keys(m.dict)
-        val = m.dict[key]
-        if val == WeakRef()
+    for key in collect(keys(m.dict))
+        if m.dict[key] == WeakRef()
             delete!(m.dict, key)
         else
             m.dict[key] = m.dict[key].value
         end
     end
+    nothing
 end

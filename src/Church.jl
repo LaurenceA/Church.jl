@@ -20,6 +20,8 @@ type GetIndex{S, T <: Tuple}
     struct::S
     args::T
     deps::Vector
+    #Value only used in GC phase.
+    value::Any
 end
 SDG = Union(Sample, Det, GetIndex)
 SD = Union(Sample, Det)
@@ -76,7 +78,7 @@ getindex(s, a1::SDG, args...) =
 getindex(s, a1::SDG) = 
     GI(s, a1)
 GI(struct, args...) = begin
-    g = GetIndex(struct, args, Array(WSDG, 0))
+    g = GetIndex(struct, args, Array(WSDG, 0), nothing)
     push!(getindexes, g)
     add_dep(g, struct[map(value, args)...])
     for arg in args
@@ -203,112 +205,6 @@ for op in [+, -, *, /, \, .*, ./, .\]
     op(a::SDG, b) = op[a, b]
     op(a, b::SDG) = op[a, b]
 end
-
-#GC related functions.
-weaken_store(as::Vector) = begin
-    for i = 1:length(as)
-        as[i] = WeakRef(as[i])
-    end
-    nothing
-end
-strengthen_store(as::Vector) = begin
-    filter!(x -> x != WeakRef(), as)
-    for i = 1:length(as)
-        as[i] = as[i].value
-    end
-    nothing
-end
-weaken_deps(sdgs::Vector) = begin
-    for s in sdgs
-        for i = 1:length(s.deps)
-            s.deps[i] = WeakRef(s.deps[i])
-        end
-    end
-    nothing
-end
-strengthen_deps(sdgs::Vector) = begin
-    for s in sdgs
-        filter!(x -> x != WeakRef(), s.deps)
-        for i = 1:length(s.deps)
-            if isa(s.deps[i], WeakRef)
-                s.deps[i] = s.deps[i].value
-            end
-        end
-    end
-    nothing
-end
-weaken_getindexes() = begin
-    for g in getindexes
-        weaken(g.struct)
-    end
-    nothing
-end
-strengthen_getindexes() = begin
-    for g in getindexes
-        strengthen(g.struct)
-    end
-    nothing
-end
-
-wr_value(wr::WeakRef) = wr.value
-wr_value(sr) = sr
-
-isdependent(parent::SDG, child::Sample)   = parent == child.det
-isdependent(parent::SDG, child::Det)      = in(parent, child.args)
-isdependent(parent::SDG, child::GetIndex) = 
-    in(parent, child.args) || (parent == child.struct[map(value, child.args)...])
-
-args(s::Sample) = s.det
-args(d::Det) = d.args
-args(g::GetIndex) = 
-    SDG[g.args, (parent == g.struct[map(value, g.args)...])]
-
-condition_rec(parent::SDG, child::SDG) = begin
-    @assert isdependent(parent, child.args)
-    i = findfirst(x -> x==wr_value(child), deps)
-    if isa(parent.deps[i], WeakRef)
-        parent.deps[i] = parent.deps[i].value
-        for g_parent in args(parent)
-            condition_rec(g_parent, parent)
-        end
-    end
-    nothing
-end
-condition_rec(cond::Sample) = begin
-    for arg in cond.args
-        condition_rec(arg, cond)
-    end
-    nothing
-end
-condition_rec() = begin
-    for cond in conditions
-        condition_rec(cond)
-    end
-    nothing
-end
-
-apply_to_sdg(f::Function) = begin
-    f(samples)
-    f(dets)
-    f(getindexes)
-    f(conditions)
-end
-gc_church() = begin
-    #Remove redundant dependencies.
-    apply_to_sdg(remove_deps)
-    gc_disable()
-    weaken_getindexes()
-    apply_to_sdg(weaken_deps)
-    condition_rec()
-    apply_to_sdg(weaken_store)
-    gc_enable()
-    gc()
-    gc_disable()
-    apply_to_sdg(strengthen_store)
-    apply_to_sdg(strengthen_deps)
-    strengthen_getindexes()
-    gc_enable()
-end
-n_samples() = length(samples)
+include("gc.jl")
 include("datastructures.jl")
 end
