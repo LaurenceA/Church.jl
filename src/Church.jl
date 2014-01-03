@@ -11,8 +11,8 @@ type Sample{V}
     logp::Float64
     deps::Vector
 end
-type Det{T <: Tuple}
-    f::Function
+type Det{F <: Union(Function, DataType), T <: Tuple}
+    f::F
     args::T
     deps::Vector
 end
@@ -26,6 +26,9 @@ end
 SDG = Union(Sample, Det, GetIndex)
 SD = Union(Sample, Det)
 WSDG = Union(WeakRef, Sample, Det, GetIndex)
+type NoCond
+end
+const nocond = NoCond()
 
 #Store declared samples/branches
 const samples = Array(Union(Sample, WeakRef), 0)
@@ -40,7 +43,7 @@ show(io::IO, b::GetIndex) = print(io, "GetIndex")
 
 #Constructors
 import Distributions.sample
-sample(det) = begin
+sample(det, cond::NoCond) = begin
     dist = value(det)
     val = rand(dist)
     lp = logp(dist, val)
@@ -49,7 +52,7 @@ sample(det) = begin
     add_dep(s, det)
     s
 end
-condition(det, val) = begin
+sample(det, val) = begin
     dist = value(det)
     lp = logp(dist, val)
     s = Sample(det, dist, val, lp, Array(WSDG, 0))
@@ -58,7 +61,7 @@ condition(det, val) = begin
 end
 import Base.getindex
 #Construct Det
-getindex(f::Function, args...) = begin
+Det(f::Union(Function, DataType), args) = begin
     d = Det(f, args, Array(WSDG, 0))
     push!(dets, d)
     for arg in args
@@ -66,6 +69,8 @@ getindex(f::Function, args...) = begin
     end
     d
 end
+getindex(f::Function, args...) = Det(f, args)
+
 #Construct GetIndex
 getindex(s, a1, a2, a3, a4::SDG, args...) = 
     GI(s, a1, a2, a3, a4, args...)
@@ -86,6 +91,24 @@ GI(struct, args...) = begin
     end
     g
 end
+
+#Make this code work!
+a(i::Int) = symbol("a$i")
+type_a(i::Int, b::Bool) =
+    b ? :($(a(i))::SDG) : a(i)
+lift(f::Symbol, issdg::Vector{Bool}) =
+    Expr(:(=), Expr(:call, f, {type_a(i,  issdg[i]) for i = 1:length(issdg)}...),
+               Expr(:call, :Det, f, Expr(:tuple, map(a, 1:length(issdg))...)))
+lift(f::Symbol, n::Int) = begin
+    defs = Expr[]
+    for i = ((2^n)-2):-1:1
+        println(collect(bits(i)[(end-n+1):end]))
+        issdg = map(x -> x=='1', int(collect(bits(i)[(end-n+1):end])))
+        push!(defs, lift(f, issdg))
+    end
+    Expr(:block, defs...)
+end
+        
 
 #Make the sample that you're currently creating a dependent of previous samples.
 #Required by sample and condition.
@@ -194,10 +217,15 @@ for dist in filter!(isleaftype, subtypes(Distribution))
     tsym = symbol(string(dist))
     fsym = symbol(lowercase(string(dist)))
     eval(quote 
-        $fsym(args...) = $tsym(args...)
+        $fsym(args...; condition=nocond) = begin
+            det = any(issdg, args) ? Det($tsym, args) : $tsym(args...)
+            sample(det, condition)
+        end
     end)
     eval(parse("export $(string(fsym))"))
 end
+issdg(x::SDG) = true
+issdg(x) = false
 
 #Operators construct a Det if called with a sample.
 for op in [+, -, *, /, \, .*, ./, .\]

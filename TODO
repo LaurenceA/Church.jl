@@ -1,5 +1,12 @@
-GC
-  Strenthen link from getindex -> its dependent.
+Interface
+  Samples from user defined distributions are created by calling a function (e.g. geom()).
+  Samples from base distributions must therefore be created by calling a function.
+  GetIndex as before.
+  Would like to be able to have max(normal(), normal()).
+    However, it is difficult/impossible to overload functions in this way.
+    Instead, call max[a, b] - why does it make sense for this to be []?
+    Could return equal object ids max[a, b] === max[a, b].
+  
 
 Optimization:
 Dynamic dependency graph?
