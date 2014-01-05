@@ -1,7 +1,7 @@
 module Church
 using Distributions
 
-export sample, condition, value, resample, gc_church, background_sampler, n_samples, pdf
+export sample, condition, value, resample, gc_church, background_sampler, n_samples, pdf, SDG, @lift
 
 #Types
 type Sample{V}
@@ -69,20 +69,21 @@ Det(f::Union(Function, DataType), args) = begin
     end
     d
 end
-getindex(f::Function, args...) = Det(f, args)
+
+#getindex(f::Function, args...) = Det(f, args)
 
 #Construct GetIndex
-getindex(s, a1, a2, a3, a4::SDG, args...) = 
-    GI(s, a1, a2, a3, a4, args...)
-getindex(s, a1, a2, a3::SDG, args...) = 
-    GI(s, a1, a2, a3, args...)
-getindex(s, a1, a2::SDG, args...) = 
-    GI(s, a1, a2, args...)
-getindex(s, a1::SDG, args...) = 
-    GI(s, a1, args...)
-getindex(s, a1::SDG) = 
-    GI(s, a1)
-GI(struct, args...) = begin
+#getindex(s, a1, a2, a3, a4::SDG, args...) = 
+#    GI(s, a1, a2, a3, a4, args...)
+#getindex(s, a1, a2, a3::SDG, args...) = 
+#    GI(s, a1, a2, a3, args...)
+#getindex(s, a1, a2::SDG, args...) = 
+#    GI(s, a1, a2, args...)
+#getindex(s, a1::SDG, args...) = 
+#    GI(s, a1, args...)
+#getindex(s, a1::SDG) = 
+#    GI(s, a1)
+GetIndex(struct, args...) = begin
     g = GetIndex(struct, args, Array(WSDG, 0), nothing)
     push!(getindexes, g)
     add_dep(g, struct[map(value, args)...])
@@ -99,16 +100,29 @@ type_a(i::Int, b::Bool) =
 lift(f::Symbol, issdg::Vector{Bool}) =
     Expr(:(=), Expr(:call, f, {type_a(i,  issdg[i]) for i = 1:length(issdg)}...),
                Expr(:call, :Det, f, Expr(:tuple, map(a, 1:length(issdg))...)))
-lift(f::Symbol, n::Int) = begin
+lift_gi(typ, issdg::Vector{Bool}) =
+    Expr(:(=), Expr(:call, :getindex, :(s::$typ),{type_a(i,  issdg[i]) for i = 1:length(issdg)}...),
+               Expr(:call, :GetIndex, :s, map(a, 1:length(issdg))...))
+lift(f, n::Int, inner_func::Function=lift) = begin
     defs = Expr[]
-    for i = ((2^n)-2):-1:1
-        println(collect(bits(i)[(end-n+1):end]))
-        issdg = map(x -> x=='1', int(collect(bits(i)[(end-n+1):end])))
-        push!(defs, lift(f, issdg))
+    for nsamps in n:(-1):1
+        for c in combinations(1:n, nsamps)
+            issdg = fill(false, n)
+            for i in c
+                issdg[i] = true
+            end
+            push!(defs, inner_func(f, issdg))
+        end
     end
     Expr(:block, defs...)
 end
-        
+macro lift_gi(typ, n)
+    esc(lift(typ, n, lift_gi))
+end
+macro lift(f, n)
+    esc(lift(f, n))
+end
+
 
 #Make the sample that you're currently creating a dependent of previous samples.
 #Required by sample and condition.
@@ -229,9 +243,9 @@ issdg(x) = false
 
 #Operators construct a Det if called with a sample.
 for op in [+, -, *, /, \, .*, ./, .\]
-    op(a::SDG, b::SDG) = op[a, b]
-    op(a::SDG, b) = op[a, b]
-    op(a, b::SDG) = op[a, b]
+    op(a::SDG, b::SDG) = Det(op, (a, b))
+    op(a::SDG, b) = Det(op, (a, b))
+    op(a, b::SDG) = Det(op, (a, b))
 end
 include("gc.jl")
 include("datastructures.jl")

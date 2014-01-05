@@ -1,3 +1,6 @@
+#Must define isweak, weaken, strengthen and @lift_gi the datastructure.
+import Base.getindex
+
 #Don't weaken arrays or dicts
 isweak(a::Array) = false
 weaken(a::Array) = nothing
@@ -5,6 +8,9 @@ strengthen(a::Array) = nothing
 isweak(d::Dict) = false
 weaken(d::Dict) = nothing
 strengthen(d::Dict) = nothing
+@lift_gi(Vector, 1)
+@lift_gi(Matrix, 2)
+@lift_gi(Dict, 1)
 
 #If
 export If, @If
@@ -20,7 +26,6 @@ type Uneval
 end
 const uneval = Uneval()
 
-import Base.getindex
 getindex(i::If, cond::Int) = getindex(i, bool(cond))
 getindex(i::If, cond::Bool) =
     if cond
@@ -49,6 +54,7 @@ strengthen(i::If) = begin
     i.val_true = strengthen(i.val_true)
     i.val_false = strengthen(i.val_false)
 end
+@lift_gi(If, 1)
 
 export Mem#, InfiniteVector
 
@@ -84,7 +90,6 @@ type Mem{D}
     f::Function
     dict::D
 end
-import Base.getindex
 getindex(m::Mem, args...) = begin
     if !haskey(m.dict, args)
         m.dict[args] = m.f(args...)
@@ -112,3 +117,4 @@ strengthen(m::Mem) = begin
     end
     nothing
 end
+@lift_gi(Mem, 1)
