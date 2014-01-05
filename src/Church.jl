@@ -82,11 +82,11 @@ type_a(i::Int, b::Bool) =
     b ? :($(a(i))::SDG) : a(i)
 lift(f::Symbol, issdg::Vector{Bool}) =
     Expr(:(=), Expr(:call, f, {type_a(i,  issdg[i]) for i = 1:length(issdg)}...),
-               Expr(:call, :Det, f, Expr(:tuple, map(a, 1:length(issdg))...)))
+               Expr(:call, :(Church.Det), f, Expr(:tuple, map(a, 1:length(issdg))...)))
 lift_gi(typ, issdg::Vector{Bool}) =
     Expr(:(=), Expr(:call, :getindex, :(s::$typ),{type_a(i,  issdg[i]) for i = 1:length(issdg)}...),
                Expr(:call, :GetIndex, :s, map(a, 1:length(issdg))...))
-lift(f, n::Int, inner_func::Function=lift) = begin
+lift(f, n::Int, inner_func::Function) = begin
     defs = Expr[]
     for nsamps in n:(-1):1
         for c in combinations(1:n, nsamps)
@@ -103,7 +103,14 @@ macro lift_gi(typ, n)
     esc(lift(typ, n, lift_gi))
 end
 macro lift(f, n)
-    esc(lift(f, n))
+    esc(quote
+        if Main == Base.function_module($f)
+            $(lift(f, n, lift))
+        else
+            eval(parse(string("import ", Base.function_module($f), ".", $f)))
+            $(lift(f, n, lift))
+        end
+    end)
 end
 
 add_dep(s::SDG, arg::SDG) =
