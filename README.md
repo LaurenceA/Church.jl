@@ -4,72 +4,61 @@
 
 Chuch.jl aims to make it easy for anyone to perform inference in complex, and simple, probabilistic models.
 
-Random variables
+Constructing a model
 ----------------
-You can construct a random variable by calling `sample` on a distribution, from the `Distributions` package, for example,
+This is easiest to describe by example.
 ```julia
-using Distributions
 using Church
 
-#Define the random variable a, with distribution N(0, 1).
-a = sample(Normal(0, 1))
+#You can define a random variable, simply by calling a function named according to the distribution.
+a = normal()
+
+#You can apply usual arithemetic operators to samples.
+#Here we square of a.
+b = a*a
+
+#To apply other functions to random variables, you must first "lift" the function,
+#so the function knows how to deal with random variables.
+#The second argument to lift is the number of input arguments.
+@lift(cosh, 1)
+c = cosh(a)
+
+#You can define random variables which depend on previous random variables,
+#Here, we define a Gaussian with mean a, and stdev cosh(a)
+d = normal(a, c)
 
 for i = 1:5
-  #Resample performs a single MCMC step.
-  resample()
-  #value(a) gives the value of a for the current sample.
-  println(value(a))
+  for j = 1:5
+    #Resample performs a single MCMC step.
+    resample()
+  end
+  #value(a) returns the value of a for the current sample.
+  @printf("a:% .3f, b:% .3f, c:% .3f, d:% .3f", value(a), value(b), value(c), value(d)); println()
 end
 
 #Prints:
-#-0.1029734349357338
-#-1.015922485444797
-#-2.461967392570218
-# 0.7876594234354186
-#-1.6596582450563369
-```
-
-Deterministic functions
------------------------
-You can construct deterministic functions of random variables by replacing the brackets in the function call by square brackets.  
-For instance, you use `abs[a]` instead of `abs(a)`.
-The reason for this is straightforward, `a` has type `Sample`, so `abs` does note know how to deal with it directly.
-Calling `abs[a]` allows Church.jl to handle the function call correctly.
-Extending the model we wrote previously, we could use,
-```julia
-using Distributions
-using Church
-
-a = sample(Normal(0, 1))
-b = abs[a]
-
-for i = 1:5
-  resample()
-  #Note that value also works for deterministic functions of random variables.
-  println(value(b))
-end
-
-#Prints:
-# 0.8135278459720077
-# 0.5929276217773704
-# 0.2504229036079722
-# 0.20016542444988056
-# 1.998632465314105
+#a: 0.978, b: 0.957, c: 1.518, d:-0.240
+#a: 0.262, b: 0.069, c: 1.035, d:-1.598
+#a: 0.262, b: 0.069, c: 1.035, d:-1.065
+#a: 0.262, b: 0.069, c: 1.035, d:-0.458
+#a:-0.182, b: 0.033, c: 1.017, d:-0.112
 ```
 
 Conditioning
 ------------
-So far, we haven't done anything interesting - you can sample `a` and `b` in the previous sections by simply using `a = rand(Normal(0, 1))` and `b = abs(a)`.
-Church.jl is interesting because you can condition these draws on known data.
+So far, we haven't done anything interesting - you could sample `a` and `b` in the previous sections by simply using `a = rand(Normal(0, 1))` and `b = a*a`.
+In Church.jl, you can condition these draws on known data.
 For instance, to sample P(a, b| c=10), where c ~ Normal(b, 0.1),
 ```julia
-using Distributions
 using Church
 
-a = sample(Normal(0, 1))
-b = abs[a]
-#Note that Normal does not know how to handle b::Sample, so Normal must be invoked with square brackets.
-condition(Normal[b, 0.1], 3)
+@lift(abs, 1)
+
+a = normal(0, 1)
+b = abs(a)
+
+#Lets say we know that c=3 was drawn from a Gaussian with mean b, and stdev 0.1.
+c = normal(b, 0.1; condition=3)
 
 #Now that we're doing inference, we need to perform many sampling steps, 
 #for the model to converge to the correct distribution.  This is known as burn-in.
@@ -84,32 +73,39 @@ println(value(a))
 
 Constructing more complex models
 --------------------------------
-One very important aspect of the Church.jl framework is that you can use arbitrary programming constructs to generate your model, for instance,
+We might like to construct, for instance, a mixture model.
 ```julia
-using Distributions
 using Church
 
 #Generate some data
-data = randn(10)
+data = [randn(10)+6, randn(10)-6]
 
-#Define the model parameters
-m = sample(Normal(0, 10))
-v = sample(Gamma(2, 2))
+#The model parameters
+K = 2
+ms = [normal(0, 10) for i = 1:K]
+vs = [gamma(2, 2) for i = 1:K]
 
-for i = 1:10
+#Which mixture component does each data item belong to?
+ks = [1+bernoulli() for i = 1:length(data)]
+
+for i = 1:length(data)
   #Condition on the data.
-  condition(Normal[m, v], data[i])
+  normal(ms[ks[i]], vs[ks[i]]; condition=data[i])
 end
 
-for i = 1:1000
+for i = 1:10^4
   resample()
 end
-println((value(m), value(v)))
+@printf("m1:% .3f, m2:% .3f, v1:% .3f, v2:% .3f", value(ms[1]), value(ms[2]), value(vs[1]), value(vs[2]))
+println()
+print(map(print(value, ks)))
 
 #Prints:
-#(1.1352555080470663,0.8533067108422825)
+#m1:-5.575, m2: 6.024, v1: 0.947, v2: 0.940
+#22222222221111111111
 ```
 
+Varying the number of components.
 If statements
 -------------
 If statements are useful, as they allow model selection
@@ -121,7 +117,7 @@ using Church
 data = randn(10)
 
 #The distribution could be a Normal, or a Gamma.
-dist = @branch(sample(Bernoulli()), Normal(0, 1), Gamma(1, 1))
+dist = @If(bernoulli(), normal(0, 1), normal(0, 2))
 
 for i = 1:10
   condition(dist, data[i])
