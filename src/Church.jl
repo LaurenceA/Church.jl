@@ -1,7 +1,7 @@
 module Church
 using Distributions
 
-export sample, condition, value, resample, gc_church, background_sampler, n_samples, pdf, SDG, @lift
+export value, resample, gc_church, background_sampler, n_samples, pdf, SDG, @lift
 
 #Types
 type Sample{V}
@@ -24,7 +24,6 @@ type GetIndex{S, T <: Tuple}
     value::Any
 end
 SDG = Union(Sample, Det, GetIndex)
-SD = Union(Sample, Det)
 WSDG = Union(WeakRef, Sample, Det, GetIndex)
 type NoCond
 end
@@ -59,8 +58,6 @@ sample(det, val) = begin
     add_dep(s, det)
     s
 end
-import Base.getindex
-#Construct Det
 Det(f::Union(Function, DataType), args) = begin
     d = Det(f, args, Array(WSDG, 0))
     push!(dets, d)
@@ -70,19 +67,6 @@ Det(f::Union(Function, DataType), args) = begin
     d
 end
 
-#getindex(f::Function, args...) = Det(f, args)
-
-#Construct GetIndex
-#getindex(s, a1, a2, a3, a4::SDG, args...) = 
-#    GI(s, a1, a2, a3, a4, args...)
-#getindex(s, a1, a2, a3::SDG, args...) = 
-#    GI(s, a1, a2, a3, args...)
-#getindex(s, a1, a2::SDG, args...) = 
-#    GI(s, a1, a2, args...)
-#getindex(s, a1::SDG, args...) = 
-#    GI(s, a1, args...)
-#getindex(s, a1::SDG) = 
-#    GI(s, a1)
 GetIndex(struct, args...) = begin
     g = GetIndex(struct, args, Array(WSDG, 0), nothing)
     push!(getindexes, g)
@@ -93,7 +77,6 @@ GetIndex(struct, args...) = begin
     g
 end
 
-#Make this code work!
 a(i::Int) = symbol("a$i")
 type_a(i::Int, b::Bool) =
     b ? :($(a(i))::SDG) : a(i)
@@ -123,9 +106,6 @@ macro lift(f, n)
     esc(lift(f, n))
 end
 
-
-#Make the sample that you're currently creating a dependent of previous samples.
-#Required by sample and condition.
 add_dep(s::SDG, arg::SDG) =
     if !in(s, arg.deps)
         push!(arg.deps, s)
@@ -133,17 +113,16 @@ add_dep(s::SDG, arg::SDG) =
 add_dep(s::SDG, arg) = nothing
 
 #Get the value of an expression.
-value(det::Det) = begin
-    det.f(map(value, det.args)...)
-end
 value(s::Sample) = s.value
-value(s) = s
+value(det::Det) = 
+    det.f(map(value, det.args)...)
 value(g::GetIndex) = begin
     res = g.struct[map(value, g.args)...]
     #Add g as a dependent of struct [arg]
     add_dep(g, res)
     value(res)
 end
+value(s) = s
 
 #Don't care whether cdf or pdf is needed.
 logp(d::ContinuousDistribution, x) = logpdf(d, x)
@@ -168,13 +147,6 @@ deps_recurse(s, deps::Vector{Sample}) = begin
     nothing
 end
 
-#check_dep(origin::SDG) = (dependent) -> check_dep(origin, dependent)
-#check_dep(origin::SDG, dependent::Union(Sample, Det)) = begin
-#    @assert in(origin, depdendent.args)
-#    true
-#end
-#check_dep(origin::SDG, dependent::GetIndex) =
-#    in(origin, dependent.args) || (origin == dependent.struct[map(value, dependent.args)...])
 remove_deps(origin::SDG) =
     filter!(x -> isdependent(origin, x), origin.deps)
 remove_deps(as::Vector) = begin
@@ -213,20 +185,17 @@ resample() =
     end
 
 #Run sampling + garbage collection in background.
-background_sampler() = 
+background_sampler(gc=true) = 
     @async while true
         tic()
         resample()
         sleep(1E-6)
-        if rand() < toq()
+        if gc && rand() < toq()
             gc_church()
         end
     end
-#Sugar
-#Two alternatives to allow construction of Distributions.
-#Use getindex directly on the datatype, breaks array construction syntax!
-#getindex{D<:Distribution}(dist::Type{D}, args...) = Det(dist, args)
-#Define (and export) a function for each distribution!
+
+#Define distributions.
 for dist in filter!(isleaftype, subtypes(Distribution))
     tsym = symbol(string(dist))
     fsym = symbol(lowercase(string(dist)))
@@ -241,11 +210,12 @@ end
 issdg(x::SDG) = true
 issdg(x) = false
 
-#Operators construct a Det if called with a sample.
+#Overload operators.
 for op in [+, -, *, /, \, .*, ./, .\]
     op(a::SDG, b::SDG) = Det(op, (a, b))
     op(a::SDG, b) = Det(op, (a, b))
     op(a, b::SDG) = Det(op, (a, b))
+    op(a::SDG) = Det(op, (a,))
 end
 include("gc.jl")
 include("datastructures.jl")
