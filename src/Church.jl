@@ -10,6 +10,7 @@ type Sample{V}
     value::V
     logp::Float64
     deps::Vector
+    sampler::Function
 end
 type Det{F <: Union(Function, DataType), T <: Tuple}
     f::F
@@ -41,20 +42,21 @@ show(io::IO, s::Sample) = print(io, "Sample", tuple(s.dist, s.value))
 show(io::IO, b::GetIndex) = print(io, "GetIndex")
 
 #Constructors
+fallback_sampler(d::Distribution, v) = rand(d)
 import Distributions.sample
-sample(det, cond::NoCond) = begin
+sample(det, cond::NoCond, sampler::Function) = begin
     dist = value(det)
     val = rand(dist)
     lp = logp(dist, val)
-    s = Sample(det, dist, val, lp, Array(WSDG, 0))
+    s = Sample(det, dist, val, lp, Array(WSDG, 0), sampler)
     push!(samples, s)
     add_dep(s, det)
     s
 end
-sample(det, val) = begin
+sample(det, val, sampler::Function) = begin
     dist = value(det)
     lp = logp(dist, val)
-    s = Sample(det, dist, val, lp, Array(WSDG, 0))
+    s = Sample(det, dist, val, lp, Array(WSDG, 0), sampler)
     add_dep(s, det)
     s
 end
@@ -169,7 +171,7 @@ resample_inner(s::Sample) = begin
     deps = Sample[]
     deps_recurse(s, deps)
     old_logp = mapreduce(dep->dep.logp, +, deps)
-    s.value  = rand(s.dist)
+    s.value  = s.sampler(s.dist, old_val)
     new_dists = map(s -> value(s.det), deps)
     new_logps  = map((d, s) -> logp(d, s.value), new_dists, deps)
     new_logp = sum(new_logps)
@@ -207,9 +209,9 @@ for dist in filter!(isleaftype, subtypes(Distribution))
     tsym = symbol(string(dist))
     fsym = symbol(lowercase(string(dist)))
     eval(quote 
-        $fsym(args...; condition=nocond) = begin
+        $fsym(args...; condition=nocond, sampler=fallback_sampler) = begin
             det = any(issdg, args) ? Det($tsym, args) : $tsym(args...)
-            sample(det, condition)
+            sample(det, condition, sampler)
         end
     end)
     eval(parse("export $(string(fsym))"))
