@@ -200,29 +200,6 @@ propose(d::Distribution, old_val, s::Function) = begin
      logp(d, old_val )-logp(prop_dist_backward, old_val ), 
      logp(d, prop_val)-logp(prop_dist_forward , prop_val))
 end
-
-
-#resample_inner(s::Sample) = begin
-#    old_val  = s.value
-#    deps = Sample[]
-#    deps_recurse(s, deps)
-#    old_logp = mapreduce(dep->dep.logp, +, deps)
-#    s.value  = s.sampler(s.dist, old_val)
-#    new_dists = map(s -> value(s.det), deps)
-#    new_logps  = map((d, s) -> logp(d, s.value), new_dists, deps)
-#    new_logp = sum(new_logps)
-#    if !(exp(new_logp - old_logp) > rand())
-#        #Reject change
-#        s.value = old_val
-#    else
-#        #Accept changes
-#        for i = 1:length(deps)
-#            deps[i].dist = new_dists[i]
-#            deps[i].logp = new_logps[i]
-#        end
-#    end
-#    nothing
-#end
 resample() = 
     if length(samples) != 0
         index = rand(1:length(samples))

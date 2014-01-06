@@ -1,8 +1,8 @@
 using Church
 
 dp(concentration::Real, base_measure::Function) = begin
-    sticks = Mem(i::Int -> beta(1., concentration), Dict())
-    atoms  = Mem(i::Int -> base_measure(), Dict())
+    sticks = Mem(i::Int -> beta(1., concentration))
+    atoms  = Mem(i::Int -> base_measure())
     loop(i::Int) = 
         @If(bernoulli(sticks[i]), atoms[i], loop(i+1))
     d = () -> loop(1)
@@ -22,5 +22,5 @@ fs = [f() for i = 1:20]
 n_data = 10
 n_components = 20
 indicies = [categorical(n_components) for i = 1:n_data]
-components = Mem((i::Int) -> normal(), Dict())
+components = Mem((i::Int) -> normal())
 data = [components[indicies[i]] for i = 1:n_data]
