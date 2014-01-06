@@ -135,7 +135,9 @@ ks = [categorical(ps) for i = 1:length(data)]
 
 
 #Condition on the data.
-ds = [normal(ms[ks[i]], vs[ks[i]]; condition=data[i]) for i = 1:length(data)]
+for i = 1:length(data)
+    normal(ms[ks[i]], vs[ks[i]]; condition=data[i])
+end
 
 for i = 1:10^3
   for i = 1:10^3
@@ -143,10 +145,10 @@ for i = 1:10^3
   end
   gc_church()
 end
-println(map(value, ks))
+map(x -> print(value(x)), ks)
 
 #Prints:
-#64666666665555533595
+#89998788884444444444
 ```
 
 If statements
