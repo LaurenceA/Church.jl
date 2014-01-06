@@ -1,36 +1,12 @@
-Interface
-  Samples from user defined distributions are created by calling a function (e.g. geom()).
-  Samples from base distributions must therefore be created by calling a function.
-  GetIndex as before.
-  Would like to be able to have max(normal(), normal()).
-    However, it is difficult/impossible to overload functions in this way.
-    Instead, call max[a, b] - why does it make sense for this to be []?
-    Could return equal object ids max[a, b] === max[a, b].
-  
-
-Optimization:
-Dynamic dependency graph?
-  Every node has:
-    static_deps
-    dynamic_deps
-
-Samplers:
-  Add facility for different proposal distribution.
-  sample(dist; proposal= ...)
-
 Optimization:
   Collapse deterministic functions?
+  Dynamic dependency graph?
+    Every node has:
+      static_deps
+      dynamic_deps
 
 Extend libraries:
-  Memoized/infinite vector datastructure?
   Vectors:
     IID(dist, dims)
     Joint(dist1, dist2...)
     Joint(dists)
-
-Error checking:
-  Det error checking - det.f cannot return SDB.
-
-README
-Construct a sample, assigned to a variable, a.
-a = sample(d::Distribution) 
