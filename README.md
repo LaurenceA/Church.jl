@@ -73,7 +73,6 @@ println(value(a))
 
 Mixture Model
 -------------
-What if we don't know the
 ```julia
 using Church
 
@@ -84,7 +83,7 @@ data = [randn(10)+6, randn(10)-6]
 K = 2
 ms = [normal(0, 10) for i = 1:K]
 vs = [gamma(2, 2) for i = 1:K]
-ps = dirichlet([1.,1.])
+ps = dirichlet(ones(K))
 
 #Which mixture component does each data item belong to?
 ks = [categorical(ps) for i = 1:length(data)]
@@ -109,7 +108,50 @@ println((value(ps)[1], value(ps)[2]))
 #(0.43393275606877524,0.5660672439312248)
 ```
 
-Varying the number of components.
+Mixture models, with variable numbers of components.
+------------------------------------------
+We cannot write
+```julia
+K = poisson(3)
+ms = [normal(0, 10) for i = 1:K]
+```
+As the list comprehension expects K to be an integer, not a sample.
+Instead, you can exploit the lazy datastructures available in Church.jl.
+For instance,
+```julia
+using Church
+using Distributions
+
+#Generate some data
+data = [randn(10)+6, randn(10)-6]
+
+#The model parameters
+ms = Mem((i::Int) -> normal(0, 10), Dict())
+vs = Mem((i::Int) -> gamma(2, 2), Dict())
+ps = dirichlet(10, 1.)
+
+#Which mixture component does each data item belong to?
+ks = [categorical(ps) for i = 1:length(data)]
+
+for i = 1:length(data)
+  #Condition on the data.
+  normal(ms[ks[i]], vs[ks[i]]; condition=data[i])
+end
+
+for i = 1:10^3
+  for i = 1:10^3
+    resample()
+  end
+  gc_church()
+end
+println(map(value, ks))
+
+#Prints:
+#m1:-5.575, m2: 6.024, v1: 0.947, v2: 0.940
+#22222222221111111111
+#(0.43393275606877524,0.5660672439312248)
+```
+
 If statements
 -------------
 If statements are useful, as they allow model selection
