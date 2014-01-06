@@ -60,6 +60,7 @@ sample(det, val, sampler::Union(NoSampler, Function)) = begin
     dist = value(det)
     lp = logp(dist, val)
     s = Sample(det, dist, val, lp, Array(WSDG, 0), sampler)
+    push!(conditions, s)
     add_dep(s, det)
     s
 end
