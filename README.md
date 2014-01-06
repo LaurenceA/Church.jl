@@ -71,9 +71,9 @@ println(value(a))
 #-2.7382930822004345
 ```
 
-Constructing more complex models
---------------------------------
-We might like to construct, for instance, a mixture model.
+Mixture Model
+-------------
+What if we don't know the
 ```julia
 using Church
 
@@ -84,9 +84,10 @@ data = [randn(10)+6, randn(10)-6]
 K = 2
 ms = [normal(0, 10) for i = 1:K]
 vs = [gamma(2, 2) for i = 1:K]
+ps = dirichlet([1.,1.])
 
 #Which mixture component does each data item belong to?
-ks = [1+bernoulli() for i = 1:length(data)]
+ks = [categorical(ps) for i = 1:length(data)]
 
 for i = 1:length(data)
   #Condition on the data.
@@ -98,11 +99,14 @@ for i = 1:10^4
 end
 @printf("m1:% .3f, m2:% .3f, v1:% .3f, v2:% .3f", value(ms[1]), value(ms[2]), value(vs[1]), value(vs[2]))
 println()
-print(map(print(value, ks)))
+map(x -> print(value(x)), ks)
+println()
+println((value(ps)[1], value(ps)[2]))
 
 #Prints:
 #m1:-5.575, m2: 6.024, v1: 0.947, v2: 0.940
 #22222222221111111111
+#(0.43393275606877524,0.5660672439312248)
 ```
 
 Varying the number of components.
