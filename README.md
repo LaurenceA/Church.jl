@@ -126,17 +126,16 @@ using Distributions
 data = [randn(10)+6, randn(10)-6]
 
 #The model parameters
-ms = Mem((i::Int) -> normal(0, 10), Dict())
-vs = Mem((i::Int) -> gamma(2, 2), Dict())
-ps = dirichlet(10, 1.)
+ms = Mem((i::Int) -> normal(0, 10))
+vs = Mem((i::Int) -> gamma(2, 2))
+ps = dirichlet(10, 1.; sampler=(d,v)->Dirichlet(3*v+0.001))
 
 #Which mixture component does each data item belong to?
 ks = [categorical(ps) for i = 1:length(data)]
 
-for i = 1:length(data)
-  #Condition on the data.
-  normal(ms[ks[i]], vs[ks[i]]; condition=data[i])
-end
+
+#Condition on the data.
+ds = [normal(ms[ks[i]], vs[ks[i]]; condition=data[i]) for i = 1:length(data)]
 
 for i = 1:10^3
   for i = 1:10^3
@@ -147,9 +146,7 @@ end
 println(map(value, ks))
 
 #Prints:
-#m1:-5.575, m2: 6.024, v1: 0.947, v2: 0.940
-#22222222221111111111
-#(0.43393275606877524,0.5660672439312248)
+#64666666665555533595
 ```
 
 If statements
