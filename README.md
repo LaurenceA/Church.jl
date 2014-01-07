@@ -4,29 +4,50 @@
 
 Chuch.jl aims to make it easy for anyone to perform inference in complex, and simple, probabilistic models.
 
-Constructing a model
-----------------
-This is easiest to describe by example.
+Getting started
+---------------
+To install, use
+```julia
+```
+To load, use
 ```julia
 using Church
+```
 
-#You can define a random variable, simply by calling a function named according to the distribution.
+Constructing a model
+---------------------
+You can define a random variable simply by calling a function,
+```julia
 a = normal()
+```
+Church.jl contains all the distributions in Distributions.jl - with function names that are just lowercase versions of the distribution names.
 
-#You can apply usual arithemetic operators to samples.
-#Here we square of a.
-b = a*a
+You can apply standard operators (e.g. `+`) directly to samples,
+```julia
+b = normal() * normal()
+```
 
-#To apply other functions to random variables, you must first "lift" the function,
-#so the function knows how to deal with random variables.
-#The second argument to lift is the number of input arguments.
+To apply other functions to random variables, you must first "lift" the function.
+This overloads the function, so that it can deal with random variables.
+For instance,
+```julia
+@lift(cosh, 1)
+c = cosh(normal())
+```
+Note that the second argument to lift is the number of arguments, which, in this case, is 1.
+
+Combining these, we could write,
+```julia
+a = normal()
+b = a * a
 @lift(cosh, 1)
 c = cosh(a)
-
-#You can define random variables which depend on previous random variables,
-#Here, we define a Gaussian with mean a, and stdev cosh(a)
 d = normal(a, c)
-
+```
+To sample these random variables, we use `resample()`, which performs a single MCMC step, and use `value(a)` to report the value of `a` for the current sample.
+Note that `value(a)` is ONLY provided for recording or printing the value of samples.
+Any other use is likely to break the algorithm.
+```julia
 for i = 1:5
   for j = 1:5
     #Resample performs a single MCMC step.
@@ -47,8 +68,11 @@ end
 Conditioning
 ------------
 So far, we haven't done anything interesting - you could sample `a` and `b` in the previous sections by simply using `a = rand(Normal(0, 1))` and `b = a*a`.
-In Church.jl, you can condition these draws on known data.
-For instance, to sample P(a, b| c=10), where c ~ Normal(b, 0.1),
+In Church.jl, you can condition these draws on known data, using the keyword argument `condition`,
+```julia
+normal(1, 1; condition=3)
+```
+In a more complete example, to sample P(a| c=10), where c ~ Normal(b, 0.1), and a ~ Normal(0, 1),
 ```julia
 using Church
 
@@ -56,13 +80,11 @@ using Church
 
 a = normal(0, 1)
 b = abs(a)
-
-#Lets say we know that c=3 was drawn from a Gaussian with mean b, and stdev 0.1.
 c = normal(b, 0.1; condition=3)
 
 #Now that we're doing inference, we need to perform many sampling steps, 
 #for the model to converge to the correct distribution.  This is known as burn-in.
-for i = 1:1000
+for i = 1:10^3
   resample()
 end
 println(value(a))
@@ -71,8 +93,8 @@ println(value(a))
 #-2.7382930822004345
 ```
 
-Mixture Model
--------------
+Examples: mixture model - fixed number of components.
+-------------------------------
 ```julia
 using Church
 
@@ -107,16 +129,17 @@ println((value(ps)[1], value(ps)[2]))
 #22222222221111111111
 #(0.43393275606877524,0.5660672439312248)
 ```
+Note that the inferred parameters are sensible, given the data.
 
-Mixture models, with variable numbers of components.
+Garbage collecting unused mixture components
 ------------------------------------------
-We cannot write
+We might want to define a mixture model with a variable number of components, for instance,
 ```julia
 K = poisson(3)
 ms = [normal(0, 10) for i = 1:K]
 ```
-As the list comprehension expects K to be an integer, not a sample.
-Instead, you can exploit the lazy datastructures available in Church.jl.
+However, you cannot do this, because the list comprehension needs K to be an integer, not a sample.
+Instead, you can use a large number of components, then exploit the lazy datastructures and garbage collector in Church.jl to avoid instantiating unused mixture components.
 For instance,
 ```julia
 using Church
@@ -150,33 +173,76 @@ map(x -> print(value(x)), ks)
 #Prints:
 #89998788884444444444
 ```
+So the model is only using 4 components.
+Looking at the value of `ms`, we see that the parameters for the other components have not been instansiated.
+The other components, that have been created at some point during the sampling, have been cleaned up.
 
-If statements
--------------
-If statements are useful, as they allow model selection
+Defining new distributions
+--------------------------
+In Church.jl, a distribution is just a function, so to define a new distributioon, we just need to define a function.  A very simple example, is a mixture of normal distributions with different standard deviations,
 ```julia
-using Distributions
-using Church
+gsm(m::Real) = normal(m, gamma(2, 2))
+```
+We can also allow conditioning on new distributions, if the final call also allows conditioning.  In this case,
+```julia
+gsm(m::Real; condition=nocond) = normal(m, gamma(2, 2); condition=condition)
+```
+Now `gsm` can be conditioned just like any other distribution.  Note that you should use nocond as the default value of condition - this is the special value indicating that the distribution is not conditioned.
 
-#Generate data.
-data = randn(10)
+In another example, we could use recursion to write down a distribution,
+```julia
+geom(p::Real) = @If(bernoulli(p), 1+geom(), 1).
+```
+The macro `@If` returns `1+geom()` if `bernoulli(p)` is `1`, and returns `1` if `bernoulli(p)` is `0`.
+It only evaluates its arguments as necassery, so we do not get infinite recursive calls to `geom`.
 
-#The distribution could be a Normal, or a Gamma.
-dist = @If(bernoulli(), normal(0, 1), normal(0, 2))
+Finally, you can write down random distributions.
+For instance, the dirichlet distribution can be thought of as returning a vector, whose elements are positive and sum to 1, or it can be thought of as returning a categorical distribution.
+The `dirichlet` distribution returns a vector, in Church.jl.
+However, we could define `fdirichlet`, which does return a distribution,
+```julia
+fdirichlet(args...) = begin
+    ps = dirichlet(args...)
+    () -> categorical(ps)
+end
+
+#dir is a categorical distribution
+dir = fdirichlet(9, 0.1)
 
 for i = 1:10
-  condition(dist, data[i])
+    print(value(dir()))
 end
 
-for i = 1:5
-  resample()
-  println(value(dist))
+#Prints
+#4444448444
+```
+
+This mechanism allows you to write down a dirichlet process, which, again, is a distribution over random distributions,
+```julia
+dp(concentration::Real, base_measure::Function) = begin
+    sticks = Mem(i::Int -> beta(1., concentration))
+    atoms  = Mem(i::Int -> base_measure())
+    loop(i::Int) = 
+        @If(bernoulli(sticks[i]), atoms[i], loop(i+1))
+    d = () -> loop(1)
 end
 
-#Prints:
-Normal( μ=0.0 σ=1.0 )
-Normal( μ=0.0 σ=1.0 )
-Normal( μ=0.0 σ=1.0 )
-Normal( μ=0.0 σ=1.0 )
-Normal( μ=0.0 σ=1.0 )
+#d is a DP
+d = dp(1., normal)
+
+for i = 1:10
+    println(value(d()))
+end
+
+#Prints
+#-0.8241868921220118
+#1.2419259288985225
+#0.7481036918602126
+#1.4163485859423797
+#1.2419259288985225
+#1.2419259288985225
+#1.2419259288985225
+#1.2419259288985225
+#1.2419259288985225
+#1.2419259288985225
 ```
