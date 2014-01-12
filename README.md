@@ -8,6 +8,7 @@ Getting started
 ---------------
 To install, use
 ```julia
+Pkg.clone("Church")
 ```
 To load, use
 ```julia
