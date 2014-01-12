@@ -1,3 +1,15 @@
+Use fallbacks for datastructures
+  strengthen
+  weaken
+  isweak
+Allow dists which cannot be sampled directly (but can compute normalisation constant).
+  initial fallback for rand.
+  Must define a sampler.
+  Must define NORMALISED logpdf/logpmf.
+Allow weighting of nodes, so they get sampled more frequently
+Probabilistic profiling.
+log-joint - sum logp across all samples, and backwards from conditioned variables.
+
 Optimization:
   Collapse deterministic functions?
   Dynamic dependency graph?

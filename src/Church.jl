@@ -82,7 +82,10 @@ GetIndex(struct, args...) = begin
     end
     g
 end
+#Allow indexing into multidimensional samples.
+getindex(s::Sample, args...) = Det((s_, args_...) -> s_[args_...], tuple(s, args...))
 
+#Lifting functions.
 a(i::Int) = symbol("a$i")
 type_a(i::Int, b::Bool) =
     b ? :($(a(i))::SDG) : a(i)
@@ -141,6 +144,7 @@ value(s) = s
 logp(d::ContinuousDistribution, x) = logpdf(d, x)
 logp(d::DiscreteDistribution, x) = logpmf(d, x)
 
+#Find dependents
 deps_inner(_, s::Sample, deps::Vector{Sample}) = begin
     if !in(s, deps)
         push!(deps, s)
@@ -160,6 +164,7 @@ deps_recurse(s, deps::Vector{Sample}) = begin
     nothing
 end
 
+#Remove redundant dependents.
 remove_deps(origin::SDG) =
     filter!(x -> isdependent(origin, x), origin.deps)
 remove_deps(as::Vector) = begin
