@@ -224,9 +224,10 @@ background_sampler(gc=true) =
     end
 
 #Define distributions.
-for dist in filter!(isleaftype, subtypes(Distribution))
-    tsym = symbol(string(dist))
-    fsym = symbol(lowercase(string(dist)))
+for dist in {:MvNormal, :MvTDist, filter!(isleaftype, subtypes(Distribution))...}
+    ssym = match(r"[a-zA-Z]+", string(dist)).match
+    tsym = symbol(ssym)
+    fsym = symbol(lowercase(ssym))
     eval(quote 
         $fsym(args...; condition=nocond, sampler=nosampler) = begin
             det = any(issdg, args) ? Det($tsym, args) : $tsym(args...)
