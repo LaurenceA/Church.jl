@@ -2,12 +2,9 @@
 import Base.getindex
 
 #Don't weaken arrays or dicts
-isweak(a::Array) = false
-weaken(a::Array) = nothing
-strengthen(a::Array) = nothing
-isweak(d::Dict) = false
-weaken(d::Dict) = nothing
-strengthen(d::Dict) = nothing
+isweak(a) = false
+weaken(a) = nothing
+strengthen(a) = nothing
 @lift_gi(Vector, 1)
 @lift_gi(Matrix, 2)
 @lift_gi(Dict, 1)

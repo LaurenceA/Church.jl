@@ -1,7 +1,3 @@
-Use fallbacks for datastructures
-  strengthen
-  weaken
-  isweak
 Allow dists which cannot be sampled directly (but can compute normalisation constant).
   initial fallback for rand.
   Must define a sampler.
