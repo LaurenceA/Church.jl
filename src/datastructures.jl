@@ -110,6 +110,7 @@ strengthen(m::Mem) = begin
         if m.dict[key] == WeakRef()
             delete!(m.dict, key)
         else
+            @assert isa(m.dict[key], WeakRef)
             m.dict[key] = m.dict[key].value
         end
     end
