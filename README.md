@@ -2,13 +2,23 @@
 
 [![Build Status](https://travis-ci.org/LaurenceA/Church.jl.png)](https://travis-ci.org/LaurenceA/Church.jl)
 
-Chuch.jl aims to make it easy for anyone to perform inference in complex, and simple, probabilistic models.
+Chuch.jl aims to make it easy for anyone to perform MCMC inference in complex, and simple, probabilistic models.
+We aim to be:
+ - Fast
+   - Church.jl considers only the bits of the model that need to be updated during MCMC.
+ - Practical
+   - Easy to install and use.
+ - General
+   - Define new, arbitrarily complex distributions, within Church.jl.
+   - Allows you to define stochastic, recursive, and non-parametric distributions.
+   - Uses all distributions available in Distributions.jl.
+   - Includes a probabilistic garbage collector - so you define large models without running out of memory.
 
 Getting started
 ---------------
 To install, use
 ```julia
-Pkg.clone("Church")
+Pkg.add("Church")
 ```
 To load, use
 ```julia
