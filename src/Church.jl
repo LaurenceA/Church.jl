@@ -1,7 +1,7 @@
 module Church
 using Distributions
 
-export value, resample, gc_church, background_sampler, n_samples, pdf, SDG, @lift, Det
+export value, resample, gc_church, background_sampler, n_samples, pdf, SDG, @lift, Det, nocond
 
 #Types
 type NoCond

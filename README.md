@@ -57,7 +57,7 @@ d = normal(a, c)
 ```
 To sample these random variables, we use `resample()`, which performs a single MCMC step, and use `value(a)` to report the value of `a` for the current sample.
 Note that `value(a)` is ONLY provided for recording or printing the value of samples.
-Any other use is likely to break the algorithm.
+Any other is liable to give meaningless quantities in the best case, or cause the algorithm to no longer sample the correct distribution in the worst case.
 ```julia
 for i = 1:5
   #Do 5 MCMC steps.
