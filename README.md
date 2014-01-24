@@ -60,10 +60,8 @@ Note that `value(a)` is ONLY provided for recording or printing the value of sam
 Any other use is likely to break the algorithm.
 ```julia
 for i = 1:5
-  for j = 1:5
-    #Resample performs a single MCMC step.
-    resample()
-  end
+  #Do 5 MCMC steps.
+  resample(5)
   #value(a) returns the value of a for the current sample.
   @printf("a:% .3f, b:% .3f, c:% .3f, d:% .3f", value(a), value(b), value(c), value(d)); println()
 end
@@ -95,9 +93,7 @@ c = normal(b, 0.1; condition=3)
 
 #Now that we're doing inference, we need to perform many sampling steps, 
 #for the model to converge to the correct distribution.  This is known as burn-in.
-for i = 1:10^3
-  resample()
-end
+resample(10^3)
 println(value(a))
 
 #Prints:
@@ -126,9 +122,7 @@ for i = 1:length(data)
   normal(ms[ks[i]], vs[ks[i]]; condition=data[i])
 end
 
-for i = 1:10^4
-  resample()
-end
+resample(10^4)
 @printf("m1:% .3f, m2:% .3f, v1:% .3f, v2:% .3f", value(ms[1]), value(ms[2]), value(vs[1]), value(vs[2]))
 println()
 map(x -> print(value(x)), ks)
@@ -174,9 +168,7 @@ for i = 1:length(data)
 end
 
 for i = 1:10^3
-  for i = 1:10^3
-    resample()
-  end
+  resample(10^3)
   gc_church()
 end
 map(x -> print(value(x)), ks)
