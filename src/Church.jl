@@ -41,8 +41,7 @@ const conditions = Array(Union(Sample, WeakRef), 0)
 
 #Show functions
 import Base.show
-show(io::IO, s::Sample) = print(io, "Sample", tuple(s.dist, s.value))
-show(io::IO, b::GetIndex) = print(io, "GetIndex")
+show(io::IO, s::SDG) = print(io, "RV(", value(s), ")")
 
 #Constructors
 fallback_sampler(d::Distribution, v) = rand(d)
