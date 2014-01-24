@@ -6,6 +6,8 @@ Allow weighting of nodes, so they get sampled more frequently
 Probabilistic profiling.
 log-joint - sum logp across all samples, and backwards from conditioned variables.
 
+Det with a sampled function returns another function?
+
 Optimization:
   Collapse deterministic functions?
   Dynamic dependency graph?

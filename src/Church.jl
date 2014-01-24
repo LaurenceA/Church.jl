@@ -1,7 +1,7 @@
 module Church
 using Distributions
 
-export value, resample, gc_church, background_sampler, n_samples, pdf, SDG, @lift
+export value, resample, gc_church, background_sampler, n_samples, pdf, SDG, @lift, Det
 
 #Types
 type NoCond
@@ -18,7 +18,7 @@ type Sample{V, S<:Union(NoSampler, Function)}
     deps::Vector
     sampler::S
 end
-type Det{F <: Union(Function, DataType), T <: Tuple}
+type Det{F, T <: Tuple}
     f::F
     args::T
     deps::Vector
@@ -64,9 +64,10 @@ sample(det, val, sampler::Union(NoSampler, Function)) = begin
     add_dep(s, det)
     s
 end
-Det(f::Union(Function, DataType), args) = begin
+Det(f, args) = begin
     d = Det(f, args, Array(WSDG, 0))
     push!(dets, d)
+    add_dep(d, f)
     for arg in args
         add_dep(d, arg)
     end
@@ -131,7 +132,7 @@ add_dep(s::SDG, arg) = nothing
 #Get the value of an expression.
 value(s::Sample) = s.value
 value(det::Det) = 
-    det.f(map(value, det.args)...)
+    value(det.f)(map(value, det.args)...)
 value(g::GetIndex) = begin
     res = g.struct[map(value, g.args)...]
     #Add g as a dependent of struct [arg]
@@ -210,6 +211,10 @@ resample() =
     if length(samples) != 0
         index = rand(1:length(samples))
         resample_inner(samples[index])
+    end
+resample(iter::Int) =
+    for i = 1:iter
+        resample()
     end
 
 #Run sampling + garbage collection in background.
