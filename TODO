@@ -1,15 +1,13 @@
 Convergence diagnostics
-  trace plot
-  autocorrelation
-  histogram
+  Use MCMC.jl.
+  Add trace plot, and histogram to MCMC.jl?
   implementation
-    requires a facility for recording samples
-    macro?
+    check resample for drawing samples?
 
 Samplers
-  slice
-  multiple variable proposals
-  gradient
+  Use MCMC.jl.
+  Interface for to add new samplers.
+  Automatic differentiation of univariate functions by vectors?
 
 Det with a sampled function returns another function?
 
