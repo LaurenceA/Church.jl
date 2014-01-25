@@ -141,13 +141,21 @@ value(s) = s
 #Don't care whether cdf or pdf is needed.
 logp(d::ContinuousDistribution, x) = logpdf(d, x)
 logp(d::DiscreteDistribution, x) = logpmf(d, x)
-logp(s::Sample) = logp(value(s.det), s.value)
-logp_deps(s::Sample) =
-    logp(s) + mapreduce(logp, +, deps(s))
-logp_deps(s::Sample, val) = begin
+log_prior(s::Sample) = logp(value(s.det), s.value)
+log_likelihood(s::Sample) = mapreduce(log_prior, +, deps(s))
+log_likelihood(s::Sample, val) = begin
     old_val = s.value
     s.value = val
-    result = logp_deps(s)
+    result = log_likelihood(s)
+    s.value = old_val
+    result
+end
+log_joint(s::Sample) =
+    log_prior(s) + log_likelihood(s)
+log_joint(s::Sample, val) = begin
+    old_val = s.value
+    s.value = val
+    result = log_joint(s)
     s.value = old_val
     result
 end
@@ -191,27 +199,14 @@ end
 #Propose, accept/reject.
 resample_inner(s::Sample) = begin
     old_val  = s.value
-    deps = Sample[]
-    deps_recurse(s, deps)
-    old_logp_likelihood = mapreduce(logp, +, deps)
-    (s.value, old_logp_prior, new_logp_prior) = propose(value(s.det), old_val, s.sampler)
-    new_logp = mapreduce(logp, +, deps) + new_logp_prior
-    old_logp = old_logp_likelihood + old_logp_prior
-    if !(exp(new_logp - old_logp) > rand())
-        #Reject change
-        s.value = old_val
+    old_logp = log_likelihood(s)
+    proposal = rand(value(s.det))
+    new_logp = log_likelihood(s, proposal)
+    if rand() < exp(new_logp - old_logp)
+        #Accept change
+        s.value = proposal
     end
     nothing
-end
-propose(d::Distribution, _, s::NoSampler) =
-    (rand(d), 0., 0.)
-propose(d::Distribution, old_val, s::Function) = begin
-    prop_dist_forward = s(d, old_val)
-    prop_val = rand(prop_dist_forward)
-    prop_dist_backward = s(d, prop_val)
-    (prop_val, 
-     logp(d, old_val )-logp(prop_dist_backward, old_val ), 
-     logp(d, prop_val)-logp(prop_dist_forward , prop_val))
 end
 resample() = 
     if length(samples) != 0
