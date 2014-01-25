@@ -252,4 +252,5 @@ for op in [+, -, *, /, \, .*, ./, .\]
 end
 include("gc.jl")
 include("datastructures.jl")
+include("diagnostics.jl")
 end
