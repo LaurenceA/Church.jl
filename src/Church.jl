@@ -1,7 +1,7 @@
 module Church
 using Distributions
 
-export value, resample, gc_church, background_sampler, n_samples, pdf, SDG, @lift, Det, nocond
+export value, resample, gc_church, background_sampler, n_samples, pdf, RV, @lift, Det, nocond
 
 #Types
 type NoCond
@@ -9,8 +9,9 @@ end
 const nocond = NoCond()
 type NoSampler
 end
+abstract RV
 const nosampler = NoSampler()
-type Sample{V, S<:Union(NoSampler, Function)}
+type Sample{V, S<:Union(NoSampler, Function)} <: RV
     det::Any
     dist::Distribution
     value::V
@@ -18,20 +19,19 @@ type Sample{V, S<:Union(NoSampler, Function)}
     deps::Vector
     sampler::S
 end
-type Det{F, T <: Tuple}
+type Det{F, T <: Tuple} <: RV
     f::F
     args::T
     deps::Vector
 end
-type GetIndex{S, T <: Tuple}
+type GetIndex{S, T <: Tuple} <: RV
     struct::S
     args::T
     deps::Vector
     #Value only used in GC phase.
     value::Any
 end
-SDG = Union(Sample, Det, GetIndex)
-WSDG = Union(WeakRef, Sample, Det, GetIndex)
+WRV = Union(WeakRef, RV)
 
 #Store declared samples/branches
 const samples = Array(Union(Sample, WeakRef), 0)
@@ -41,7 +41,7 @@ const conditions = Array(Union(Sample, WeakRef), 0)
 
 #Show functions
 import Base.show
-show(io::IO, s::SDG) = print(io, "RV(", value(s), ")")
+show(io::IO, s::RV) = print(io, "RV(", value(s), ")")
 
 #Constructors
 fallback_sampler(d::Distribution, v) = rand(d)
@@ -50,7 +50,7 @@ sample(det, cond::NoCond, sampler::Union(NoSampler, Function)) = begin
     dist = value(det)
     val = rand(dist)
     lp = logp(dist, val)
-    s = Sample(det, dist, val, lp, Array(WSDG, 0), sampler)
+    s = Sample(det, dist, val, lp, Array(WRV, 0), sampler)
     push!(samples, s)
     add_dep(s, det)
     s
@@ -58,13 +58,13 @@ end
 sample(det, val, sampler::Union(NoSampler, Function)) = begin
     dist = value(det)
     lp = logp(dist, val)
-    s = Sample(det, dist, val, lp, Array(WSDG, 0), sampler)
+    s = Sample(det, dist, val, lp, Array(WRV, 0), sampler)
     push!(conditions, s)
     add_dep(s, det)
     s
 end
 Det(f, args) = begin
-    d = Det(f, args, Array(WSDG, 0))
+    d = Det(f, args, Array(WRV, 0))
     push!(dets, d)
     add_dep(d, f)
     for arg in args
@@ -74,7 +74,7 @@ Det(f, args) = begin
 end
 
 GetIndex(struct, args...) = begin
-    g = GetIndex(struct, args, Array(WSDG, 0), nothing)
+    g = GetIndex(struct, args, Array(WRV, 0), nothing)
     push!(getindexes, g)
     add_dep(g, struct[map(value, args)...])
     for arg in args
@@ -88,7 +88,7 @@ getindex(s::Sample, args...) = Det((s_, args_...) -> s_[args_...], tuple(s, args
 #Lifting functions.
 a(i::Int) = symbol("a$i")
 type_a(i::Int, b::Bool) =
-    b ? :($(a(i))::SDG) : a(i)
+    b ? :($(a(i))::RV) : a(i)
 lift(f::Symbol, issdg::Vector{Bool}) =
     Expr(:(=), Expr(:call, f, {type_a(i,  issdg[i]) for i = 1:length(issdg)}...),
                Expr(:call, :(Church.Det), f, Expr(:tuple, map(a, 1:length(issdg))...)))
@@ -122,11 +122,11 @@ macro lift(f, n)
     end)
 end
 
-add_dep(s::SDG, arg::SDG) =
+add_dep(s::RV, arg::RV) =
     if !in(s, arg.deps)
         push!(arg.deps, s)
     end
-add_dep(s::SDG, arg) = nothing
+add_dep(s::RV, arg) = nothing
 
 #Get the value of an expression.
 value(s::Sample) = s.value
@@ -165,7 +165,7 @@ deps_recurse(s, deps::Vector{Sample}) = begin
 end
 
 #Remove redundant dependents.
-remove_deps(origin::SDG) =
+remove_deps(origin::RV) =
     filter!(x -> isdependent(origin, x), origin.deps)
 remove_deps(as::Vector) = begin
     for a in as
@@ -240,15 +240,15 @@ for dist in {:MvNormal, :MvTDist, filter!(isleaftype, subtypes(Distribution))...
     end)
     eval(parse("export $(string(fsym))"))
 end
-issdg(x::SDG) = true
+issdg(x::RV) = true
 issdg(x) = false
 
 #Overload operators.
 for op in [+, -, *, /, \, .*, ./, .\]
-    op(a::SDG, b::SDG) = Det(op, (a, b))
-    op(a::SDG, b) = Det(op, (a, b))
-    op(a, b::SDG) = Det(op, (a, b))
-    op(a::SDG) = Det(op, (a,))
+    op(a::RV, b::RV) = Det(op, (a, b))
+    op(a::RV, b) = Det(op, (a, b))
+    op(a, b::RV) = Det(op, (a, b))
+    op(a::RV) = Det(op, (a,))
 end
 include("gc.jl")
 include("datastructures.jl")

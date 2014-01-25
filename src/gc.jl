@@ -58,9 +58,9 @@ end
 wr_value(wr::WeakRef) = wr.value
 wr_value(sr) = sr
 
-isdependent(parent::SDG, child::Sample)   = parent == child.det
-isdependent(parent::SDG, child::Det)      = in(parent, child.args)
-isdependent(parent::SDG, child::GetIndex) = 
+isdependent(parent::RV, child::Sample)   = parent == child.det
+isdependent(parent::RV, child::Det)      = in(parent, child.args)
+isdependent(parent::RV, child::GetIndex) = 
     in(parent, child.args) || (parent == child.struct[map(value, child.args)...])
 
 args(s::Sample) = {s.det}
@@ -68,8 +68,8 @@ args(d::Det) = {d.args...}
 args(g::GetIndex) = 
     {g.struct[map(value, g.args)...], g.args...}
 
-condition_rec(parent, child::SDG) = nothing
-condition_rec(parent::SDG, child::SDG) = begin
+condition_rec(parent, child::RV) = nothing
+condition_rec(parent::RV, child::RV) = begin
     @assert isdependent(parent, child)
     i = findfirst(x -> x==wr_value(child), parent.deps)
     if isa(parent.deps[i], WeakRef)

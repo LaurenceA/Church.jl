@@ -1,10 +1,15 @@
-Allow dists which cannot be sampled directly (but can compute normalisation constant).
-  initial fallback for rand.
-  Must define a sampler.
-  Must define NORMALISED logpdf/logpmf.
-Allow weighting of nodes, so they get sampled more frequently
-Probabilistic profiling.
-log-joint - sum logp across all samples, and backwards from conditioned variables.
+Convergence diagnostics
+  trace plot
+  autocorrelation
+  histogram
+  implementation
+    requires a facility for recording samples
+    macro?
+
+Samplers
+  slice
+  multiple variable proposals
+  gradient
 
 Det with a sampled function returns another function?
 

@@ -85,9 +85,9 @@ export Mem#, InfiniteVector
 
 type Mem
     f::Function
-    dict::Dict{Any, WSDG}
+    dict::Dict{Any, WRV}
 end
-Mem(f::Function) = Mem(f, Dict{Any, WSDG}())
+Mem(f::Function) = Mem(f, Dict{Any, WRV}())
 getindex(m::Mem, args...) = begin
     if !haskey(m.dict, args)
         m.dict[args] = m.f(args...)
