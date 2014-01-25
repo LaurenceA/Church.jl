@@ -30,6 +30,7 @@ type GetIndex{S, T <: Tuple} <: RV
     value::Any
 end
 WRV = Union(WeakRef, RV)
+WSample = Union(WeakRef, Sample)
 
 #Store declared samples/branches
 const samples = Array(Union(Sample, WeakRef), 0)
