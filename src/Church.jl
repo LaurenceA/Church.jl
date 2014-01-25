@@ -1,5 +1,6 @@
 module Church
 using Distributions
+include("mapdo.jl")
 
 export value, resample, gc_church, background_sampler, n_samples, pdf, RV, @lift, Det, nocond, Prior, MHMC
 
@@ -147,44 +148,20 @@ logp(d::DiscreteDistribution, x) = logpmf(d, x)
 logp(s::Sample) = logp(value(s.det), s.value)
 log_likelihood(s) = mapreduce(logp, +, deps_likelihood(s))
 log_joint(s) = mapreduce(logp, +, deps_joint(s))
-#log_likelihood(s::(Sample,), val) = begin
-#    old_val = s[1].value
-#    s[1].value = val[1]
-#    result = log_likelihood(s)
-#    s[1].value = old_val
-#    result
-#end
-#log_joint(s::(Sample,), val) = begin
-#    old_val = s.value
-#    s.value = val
-#    result = log_joint(s)
-#    s.value = old_val
-#    result
-#end
 log_likelihood(ss::(Sample...), vals::(Any...)) = begin
     old_vals = map(s -> s.value, ss)
-    #for i = 1:length(ss)
-    #    ss[i].value = vals[i]
-    #end
-    map((s, v) -> (s.value=v; nothing), ss, vals)
+    mapdo((s, v) -> s.value=v, ss, vals)
     result = log_likelihood(ss)
-    #for i = 1:length(ss)
-    #    ss[i].value = old_vals[i]
-    #end
-    map((s, v) -> (s.value=v; nothing), ss, old_vals)
+    map((s, v) -> s.value=v, ss, old_vals)
     result
 end
-#log_joint(ss::Vector{WSample}, vals::Vector) = begin
-#    old_vals = map(s -> s.value, ss)
-#    for i = 1:length(ss)
-#        ss[i].value = vals[i]
-#    end
-#    result = log_joint(ss)
-#    for i = 1:length(ss)
-#        ss[i].value = old_vals[i]
-#    end
-#    result
-#end
+log_joint(ss::(Sample...), vals::(Any...)) = begin
+    old_vals = map(s -> s.value, ss)
+    mapdo((s, v) -> s.value=v, ss, vals)
+    result = log_joint(ss)
+    map((s, v) -> s.value=v, ss, old_vals)
+    result
+end
 
 #Find dependents
 deps_inner(_, s::Sample, deps::Vector{Sample}) = begin
@@ -210,13 +187,12 @@ deps(s::Sample) = begin
     deps_recurse(s, result)
     result
 end
-#deps_joint(s::(Sample,)) = vcat(s[1], deps(s[1]))
-#deps_joint(ss::(Sample...)) =
-#    union(ss, map(s -> deps(s), ss)...)
+deps_joint(s::(Sample,)) = vcat(s[1], deps(s[1]))
+deps_joint(ss::(Sample...)) =
+    union(ss, map(s -> deps(s), ss)...)
 deps_likelihood(s::(Sample,)) = deps(s[1])
-#deps_likelihood(ss::(Sample...)) =
-#    filter(s -> !in(s, ss), deps_joint(ss))
-
+deps_likelihood(ss::(Sample...)) =
+    filter(s -> !in(s, ss), deps_joint(ss))
 
 #Remove redundant dependents.
 remove_deps(origin::RV) =
