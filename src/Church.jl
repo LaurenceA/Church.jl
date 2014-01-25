@@ -143,8 +143,10 @@ value(s) = s
 #Don't care whether cdf or pdf is needed.
 logp(d::ContinuousDistribution, x) = logpdf(d, x)
 logp(d::DiscreteDistribution, x) = logpmf(d, x)
-log_prior(s::Sample) = logp(value(s.det), s.value)
-log_likelihood(s::Sample) = mapreduce(log_prior, +, deps(s))
+logp(s::Sample) = logp(value(s.det), s.value)
+log_likelihood(s) = mapreduce(logp, +, deps_likelihood(s))
+log_joint(s) = mapreduce(logp, +, deps_joint(s))
+#Special case for Prior() sampler
 log_likelihood(s::Sample, val) = begin
     old_val = s.value
     s.value = val
@@ -152,13 +154,15 @@ log_likelihood(s::Sample, val) = begin
     s.value = old_val
     result
 end
-log_joint(s::Sample) =
-    log_prior(s) + log_likelihood(s)
-log_joint(s::Sample, val) = begin
-    old_val = s.value
-    s.value = val
-    result = log_joint(s)
-    s.value = old_val
+log_joint(ss::Vector{Sample}, vals::Vector) = begin
+    old_vals = map(s -> s.value, ss)
+    for i = 1:length(ss)
+        ss[i].value = vals[i]
+    end
+    result = log_joint(ss)
+    for i = 1:length(ss)
+        ss[i].value = old_vals[i]
+    end
     result
 end
 
@@ -181,11 +185,17 @@ deps_recurse(s, deps::Vector{Sample}) = begin
     end
     nothing
 end
-deps(s) = begin
+deps(s::Sample) = begin
     result = Sample[]
     deps_recurse(s, result)
     result
 end
+deps_joint(s::Sample) = vcat(s, deps(s))
+deps_joint(ss::Vector{Sample}) =
+    union(ss, map(s -> deps(s))...)
+deps_likelihood(s::Sample) = deps(s)
+deps_likelihood(ss::Vector{Sample}) =
+    filter(s -> !in(s, ss), deps_joint(ss))
 
 
 #Remove redundant dependents.
