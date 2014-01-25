@@ -13,9 +13,7 @@ abstract RV
 const nosampler = NoSampler()
 type Sample{V, S<:Union(NoSampler, Function)} <: RV
     det::Any
-    dist::Distribution
     value::V
-    logp::Float64
     deps::Vector
     sampler::S
 end
@@ -49,16 +47,16 @@ import Distributions.sample
 sample(det, cond::NoCond, sampler::Union(NoSampler, Function)) = begin
     dist = value(det)
     val = rand(dist)
-    lp = logp(dist, val)
-    s = Sample(det, dist, val, lp, Array(WRV, 0), sampler)
+#    lp = logp(dist, val)
+    s = Sample(det, val, Array(WRV, 0), sampler)
     push!(samples, s)
     add_dep(s, det)
     s
 end
 sample(det, val, sampler::Union(NoSampler, Function)) = begin
     dist = value(det)
-    lp = logp(dist, val)
-    s = Sample(det, dist, val, lp, Array(WRV, 0), sampler)
+    #lp = logp(dist, val)
+    s = Sample(det, val, Array(WRV, 0), sampler)
     push!(conditions, s)
     add_dep(s, det)
     s
@@ -143,6 +141,7 @@ value(s) = s
 #Don't care whether cdf or pdf is needed.
 logp(d::ContinuousDistribution, x) = logpdf(d, x)
 logp(d::DiscreteDistribution, x) = logpmf(d, x)
+logp(s::Sample) = logp(value(s.det), s.value)
 
 #Find dependents
 deps_inner(_, s::Sample, deps::Vector{Sample}) = begin
@@ -179,20 +178,13 @@ resample_inner(s::Sample) = begin
     old_val  = s.value
     deps = Sample[]
     deps_recurse(s, deps)
-    (s.value, old_logp, new_logp) = propose(s.dist, old_val, s.sampler)
-    old_logp += mapreduce(dep->dep.logp, +, deps)
-    new_dists = map(s -> value(s.det), deps)
-    new_logps = map((d, s) -> logp(d, s.value), new_dists, deps)
-    new_logp += sum(new_logps)
+    old_logp_likelihood = mapreduce(logp, +, deps)
+    (s.value, old_logp_prior, new_logp_prior) = propose(value(s.det), old_val, s.sampler)
+    new_logp = mapreduce(logp, +, deps) + new_logp_prior
+    old_logp = old_logp_likelihood + old_logp_prior
     if !(exp(new_logp - old_logp) > rand())
         #Reject change
         s.value = old_val
-    else
-        #Accept changes
-        for i = 1:length(deps)
-            deps[i].dist = new_dists[i]
-            deps[i].logp = new_logps[i]
-        end
     end
     nothing
 end
