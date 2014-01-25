@@ -142,6 +142,15 @@ value(s) = s
 logp(d::ContinuousDistribution, x) = logpdf(d, x)
 logp(d::DiscreteDistribution, x) = logpmf(d, x)
 logp(s::Sample) = logp(value(s.det), s.value)
+logp_deps(s::Sample) =
+    logp(s) + mapreduce(logp, +, deps(s))
+logp_deps(s::Sample, val) = begin
+    old_val = s.value
+    s.value = val
+    result = logp_deps(s)
+    s.value = old_val
+    result
+end
 
 #Find dependents
 deps_inner(_, s::Sample, deps::Vector{Sample}) = begin
@@ -162,6 +171,12 @@ deps_recurse(s, deps::Vector{Sample}) = begin
     end
     nothing
 end
+deps(s) = begin
+    result = Sample[]
+    deps_recurse(s, result)
+    result
+end
+
 
 #Remove redundant dependents.
 remove_deps(origin::RV) =
