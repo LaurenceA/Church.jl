@@ -55,6 +55,21 @@ strengthen_getindexes() = begin
     nothing
 end
 
+weaken(svv::Vector{SamplerVars}) = begin
+    for sv in svv
+        sv.var = WeakRef(sv.var)
+    end
+    nothing
+end
+strengthen(svv::Vector{SamplerVars}) = begin
+    filter!(x -> x.var != WeakRef(), svv)
+    for sv in svv
+        @assert isa(sv.var, WeakRef)
+        sv.var = sv.var.value
+    end
+    nothing
+end
+
 wr_value(wr::WeakRef) = wr.value
 wr_value(sr) = sr
 
@@ -109,10 +124,13 @@ gc_church() = begin
     condition_rec()
     #Weaken links in samples, dets, etc.
     apply_to_sdg(weaken_store)
+    #Weaken links from samplers
+    weaken(samplers)
     gc_enable()
     gc()
     gc_disable()
     #Strengthen links in samples, dets, etc.
+    strengthen(samplers)
     apply_to_sdg(strengthen_store)
     apply_to_sdg(strengthen_deps)
     strengthen_getindexes()
