@@ -7,15 +7,11 @@ export value, resample, gc_church, background_sampler, n_samples, pdf, RV, @lift
 type NoCond
 end
 const nocond = NoCond()
-type NoSampler
-end
 abstract RV
-const nosampler = NoSampler()
-type Sample{V, S<:Union(NoSampler, Function)} <: RV
+type Sample{V} <: RV
     det::Any
     value::V
     deps::Vector
-    sampler::S
 end
 type Det{F, T <: Tuple} <: RV
     f::F
@@ -33,6 +29,8 @@ WRV = Union(WeakRef, RV)
 WSample = Union(WeakRef, Sample)
 
 #Store declared samples/branches
+include("Sampler.jl")
+const samplers = Array(SamplerVars, 0)
 const samples = Array(Union(Sample, WeakRef), 0)
 const dets = Array(Union(Det, WeakRef), 0)
 const getindexes = Array(Union(GetIndex, WeakRef), 0)
@@ -43,21 +41,24 @@ import Base.show
 show(io::IO, s::RV) = print(io, "RV(", value(s), ")")
 
 #Constructors
-fallback_sampler(d::Distribution, v) = rand(d)
 import Distributions.sample
-sample(det, cond::NoCond, sampler::Union(NoSampler, Function)) = begin
+sample(det, cond::NoCond, sampler::Sampler) = begin
+    s = sample(det, cond)
+    push!(samplers, SamplerVars(sampler, s))
+    s
+end
+sample(det, cond::NoCond, sampler::NoSampler) = 
+    s = sample(det, cond)
+sample(det, cond::NoCond) = begin
     dist = value(det)
     val = rand(dist)
-#    lp = logp(dist, val)
-    s = Sample(det, val, Array(WRV, 0), sampler)
+    s = Sample(det, val, Array(WRV, 0))
     push!(samples, s)
     add_dep(s, det)
     s
 end
-sample(det, val, sampler::Union(NoSampler, Function)) = begin
-    dist = value(det)
-    #lp = logp(dist, val)
-    s = Sample(det, val, Array(WRV, 0), sampler)
+sample(det, val, sampler::Union(Sampler, NoSampler)) = begin
+    s = Sample(det, val, Array(WRV, 0))
     push!(conditions, s)
     add_dep(s, det)
     s
@@ -197,22 +198,10 @@ remove_deps(as::Vector) = begin
     nothing
 end
 
-#Propose, accept/reject.
-resample_inner(s::Sample) = begin
-    old_val  = s.value
-    old_logp = log_likelihood(s)
-    proposal = rand(value(s.det))
-    new_logp = log_likelihood(s, proposal)
-    if rand() < exp(new_logp - old_logp)
-        #Accept change
-        s.value = proposal
-    end
-    nothing
-end
 resample() = 
-    if length(samples) != 0
-        index = rand(1:length(samples))
-        resample_inner(samples[index])
+    if length(samplers) != 0
+        index = rand(1:length(samplers))
+        resample(samplers[index])
     end
 resample(iter::Int) =
     for i = 1:iter
@@ -236,7 +225,7 @@ for dist in {:MvNormal, :MvTDist, filter!(isleaftype, subtypes(Distribution))...
     tsym = symbol(ssym)
     fsym = symbol(lowercase(ssym))
     eval(quote 
-        $fsym(args...; condition=nocond, sampler=nosampler) = begin
+        $fsym(args...; condition=nocond, sampler=prior) = begin
             det = any(issdg, args) ? Det($tsym, args) : $tsym(args...)
             sample(det, condition, sampler)
         end
