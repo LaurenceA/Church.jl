@@ -57,15 +57,19 @@ end
 
 weaken(svv::Vector{SamplerVars}) = begin
     for sv in svv
-        sv.vars[1] = WeakRef(sv.vars[1])
+        for i = 1:length(sv.vars)
+            sv.vars[i] = WeakRef(sv.vars[i])
+        end
     end
     nothing
 end
 strengthen(svv::Vector{SamplerVars}) = begin
     filter!(x -> x.vars[1] != WeakRef(), svv)
     for sv in svv
-        @assert isa(sv.vars[1], WeakRef)
-        sv.vars[1] = sv.vars[1].value
+        for i = 1:length(sv.vars)
+            @assert isa(sv.vars[i], WeakRef)
+            sv.vars[i] = sv.vars[i].value
+        end
     end
     nothing
 end
