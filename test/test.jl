@@ -4,21 +4,18 @@ using Distributions
 const iter = 10^6
 #Geometric distribution
 
-geom() = @If(bernoulli(), 1+geom(), 1)
-test_geom() = begin
-    a = geom()
+geom(sampler) = @If(bernoulli(sampler=sampler), 1+geom(sampler), 1)
+test_geom(; sampler=Prior()) = begin
+    a = geom(sampler)
     normal(a, 3; condition=15)
     as = zeros(iter)
     for i = 1:iter
         resample()
         as[i] = value(a)
     end
-    as
+    (mean(as), sqrt(var(as)))
 end
-as = test_geom()
-
-ms = mean(as)
-vs = sqrt(var(as))
+(ms, vs) = test_geom()
 
 #Analytic
 n = 30

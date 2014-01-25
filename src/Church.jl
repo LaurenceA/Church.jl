@@ -1,7 +1,7 @@
 module Church
 using Distributions
 
-export value, resample, gc_church, background_sampler, n_samples, pdf, RV, @lift, Det, nocond
+export value, resample, gc_church, background_sampler, n_samples, pdf, RV, @lift, Det, nocond, Prior, MHMC
 
 #Types
 type NoCond
@@ -143,15 +143,33 @@ value(s) = s
 #Don't care whether cdf or pdf is needed.
 logp(d::ContinuousDistribution, x) = logpdf(d, x)
 logp(d::DiscreteDistribution, x) = logpmf(d, x)
+#Compute logp for samples
 logp(s::Sample) = logp(value(s.det), s.value)
 log_likelihood(s) = mapreduce(logp, +, deps_likelihood(s))
 log_joint(s) = mapreduce(logp, +, deps_joint(s))
-#Special case for Prior() sampler
 log_likelihood(s::Sample, val) = begin
     old_val = s.value
     s.value = val
     result = log_likelihood(s)
     s.value = old_val
+    result
+end
+log_joint(s::Sample, val) = begin
+    old_val = s.value
+    s.value = val
+    result = log_joint(s)
+    s.value = old_val
+    result
+end
+log_likelihood(ss::Vector{Sample}, vals::Vector) = begin
+    old_vals = map(s -> s.value, ss)
+    for i = 1:length(ss)
+        ss[i].value = vals[i]
+    end
+    result = log_likelihood(ss)
+    for i = 1:length(ss)
+        ss[i].value = old_vals[i]
+    end
     result
 end
 log_joint(ss::Vector{Sample}, vals::Vector) = begin
