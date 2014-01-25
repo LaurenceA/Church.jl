@@ -2,7 +2,7 @@ module Church
 using Distributions
 include("mapdo.jl")
 
-export value, resample, gc_church, background_sampler, n_samples, pdf, RV, @lift, Det, nocond, Prior, MHMC
+export value, resample, gc_church, background_sampler, n_samples, pdf, RV, @lift, Det, nocond, Prior, MHMC, NoSampler
 
 #Types
 type NoCond

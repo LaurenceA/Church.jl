@@ -15,47 +15,57 @@ test_geom(; sampler=Prior()) = begin
     end
     (mean(as), sqrt(var(as)))
 end
-(ms, vs) = test_geom()
+#(ms, vs) = test_geom()
 
 #Analytic
-n = 30
-xs = 1:n
-prior = 0.5.^xs 
-likelihood = pdf(Normal(15, 3), xs)
-posterior = prior .* likelihood
-norm_posterior = posterior/sum(posterior)
-ma = sum(norm_posterior.*xs)
-va = sqrt(sum(norm_posterior.*xs.^2) - ma^2)
-
-println((ms, ma))
-println((vs, va))
-
-@test ma*0.95 < ms < ma*1.05
-@test va*0.95 < vs < va*1.05
-
-gc_church()
+#n = 30
+#xs = 1:n
+#prior = 0.5.^xs 
+#likelihood = pdf(Normal(15, 3), xs)
+#posterior = prior .* likelihood
+#norm_posterior = posterior/sum(posterior)
+#ma = sum(norm_posterior.*xs)
+#va = sqrt(sum(norm_posterior.*xs.^2) - ma^2)
+#
+#println((ms, ma))
+#println((vs, va))
+#
+#@test ma*0.95 < ms < ma*1.05
+#@test va*0.95 < vs < va*1.05
+#
+#gc_church()
 
 #Normal distribution
 test_norm() = begin
-    a = normal(0, 2)
-    b = normal(a, 1; condition=3)
-    as = zeros(iter)
+    a = normal(0, 2; sampler=NoSampler())
+    b = normal(1, 3; sampler=NoSampler())
+    push!(Church.samplers, Church.SamplerVars(Prior(), (a, b)))
+    normal(a+b, 1; condition=1)
+    ab = mvnormal([0., 1.], [2.^2 0.; 0. 3.^2])
+    normal(ab[1]+ab[2], 1; condition=1)
+    abi = zeros(iter, 2)
+    abd = zeros(iter, 2)
     for i = 1:iter
         resample()
-        as[i] = value(a)
+        abi[i, 1] = value(a)  
+        abi[i, 2] = value(b)  
+        abd[i, :] = value(ab)  
     end
-    as
+    println(mean(abd, 1))
+    println(mean(abi, 1))
+    println(cov(abd))
+    println(cov(abi))
 end
-as = test_norm()
-ms = mean(as)
-vs = var(as)
-
-#Analytic Moments
-va = 1/(1/2^2 + 1/1)
-ma = (3/1)/(1/2^2+1/1)
-
-@test 0.95*ma < ms < 1.05*ma
-@test 0.95*va < vs < 1.05*va
+#as = test_norm()
+#ms = mean(as)
+#vs = var(as)
+#
+##Analytic Moments
+#va = 1/(1/2^2 + 1/1)
+#ma = (3/1)/(1/2^2+1/1)
+#
+#@test 0.95*ma < ms < 1.05*ma
+#@test 0.95*va < vs < 1.05*va
 
 test_mixture() = begin
     mss = zeros(iter, 2)
@@ -73,9 +83,9 @@ test_mixture() = begin
     end
     mss
 end
-(a, b) = test_mixture()[end, :]
-
-@test sign(a) != sign(b)
-@test abs(a) > 8
-@test abs(b) > 8
-gc_church()
+#(a, b) = test_mixture()[end, :]
+#
+#@test sign(a) != sign(b)
+#@test abs(a) > 8
+#@test abs(b) > 8
+#gc_church()
