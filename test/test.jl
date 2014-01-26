@@ -8,32 +8,25 @@ geom(sampler) = @If(bernoulli(sampler=sampler), 1+geom(sampler), 1)
 test_geom(; sampler=Prior()) = begin
     a = geom(sampler)
     normal(a, 3; condition=15)
-    as = zeros(iter)
-    for i = 1:iter
-        resample()
-        as[i] = value(a)
-    end
-    (mean(as), sqrt(var(as)))
+    as = resample(10^6, 10, a)
+    ms = mean(as)
+    vs = sqrt(var(as))
+    Analytic
+    n = 30
+    xs = 1:n
+    prior = 0.5.^xs 
+    likelihood = pdf(Normal(15, 3), xs)
+    posterior = prior .* likelihood
+    norm_posterior = posterior/sum(posterior)
+    ma = sum(norm_posterior.*xs)
+    va = sqrt(sum(norm_posterior.*xs.^2) - ma^2)
+    
+    println((ms, ma))
+    println((vs, va))
+    
+    @test ma*0.95 < ms < ma*1.05
+    @test va*0.95 < vs < va*1.05
 end
-#(ms, vs) = test_geom()
-
-#Analytic
-#n = 30
-#xs = 1:n
-#prior = 0.5.^xs 
-#likelihood = pdf(Normal(15, 3), xs)
-#posterior = prior .* likelihood
-#norm_posterior = posterior/sum(posterior)
-#ma = sum(norm_posterior.*xs)
-#va = sqrt(sum(norm_posterior.*xs.^2) - ma^2)
-#
-#println((ms, ma))
-#println((vs, va))
-#
-#@test ma*0.95 < ms < ma*1.05
-#@test va*0.95 < vs < va*1.05
-#
-#gc_church()
 
 #Normal distribution
 test_norm() = begin
@@ -43,14 +36,9 @@ test_norm() = begin
     normal(a+b, 1; condition=1)
     ab = mvnormal([0., 1.], [2.^2 0.; 0. 3.^2])
     normal(ab[1]+ab[2], 1; condition=1)
-    abi = zeros(iter, 2)
-    abd = zeros(iter, 2)
-    for i = 1:iter
-        resample()
-        abi[i, 1] = value(a)  
-        abi[i, 2] = value(b)  
-        abd[i, :] = value(ab)  
-    end
+    (abd, ai, bi) = resample(10^6, 10, (ab, a, b))
+    abi = [ai bi]
+    abd = hcat(abd...)'
     println(mean(abd, 1))
     println(mean(abi, 1))
     println(cov(abd))

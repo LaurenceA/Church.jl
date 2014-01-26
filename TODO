@@ -4,12 +4,20 @@ Convergence diagnostics
   implementation
     check resample for drawing samples?
 
+Automatic differentiation.
+  Use Calculus.jl as a base.
+  Define a memoized function: d(f::Function, arg::Int)
+                              d(f::Function, arg::Symbol)
+  Remember @differentiable function definitions.
+    warn if use finite diffs.
+
 Samplers
   Use MCMC.jl.
-  Interface for to add new samplers.
-  Automatic differentiation of univariate functions by vectors?
+  Interface for to add new samplers - add_sampler()
+  Automatic differentiation sans det/getindex?
 
-Det with a sampled function returns another function?
+GC improvements
+  Do not have Vector{Union(RV, WeakRef)}.  Instead, have Union(Vector{RV}, Vector{WeakRef}).
 
 Optimization:
   Collapse deterministic functions?
