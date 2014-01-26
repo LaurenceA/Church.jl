@@ -1,8 +1,14 @@
-Convergence diagnostics
-  Use MCMC.jl.
-  Add trace plot, and histogram to MCMC.jl?
-  implementation
-    check resample for drawing samples?
+Easy
+  Convergence diagnostics
+    Export MCMC.jl functions?
+    Add trace plot, and histogram to MCMC.jl?
+  GC improvements
+    Do not have Vector{Union(RV, WeakRef)}.  Instead, have Union(Vector{RV}, Vector{WeakRef}).
+
+Harder
+Subtle sampling bugs:
+  Memoized things take only samples (adding additional samples is liable break continuous samplers)
+  Check what happens when val_true depends on condition in @If.
 
 Automatic differentiation.
   Use Calculus.jl as a base.
@@ -16,8 +22,6 @@ Samplers
   Interface for to add new samplers - add_sampler()
   Automatic differentiation sans det/getindex?
 
-GC improvements
-  Do not have Vector{Union(RV, WeakRef)}.  Instead, have Union(Vector{RV}, Vector{WeakRef}).
 
 Optimization:
   Collapse deterministic functions?

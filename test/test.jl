@@ -1,8 +1,6 @@
 using Base.Test
 using Church
 using Distributions
-const iter = 10^6
-#Geometric distribution
 
 geom(sampler) = @If(bernoulli(sampler=sampler), 1+geom(sampler), 1)
 test_geom(; sampler=Prior()) = begin
