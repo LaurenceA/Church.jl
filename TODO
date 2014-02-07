@@ -13,6 +13,8 @@ Samplers
 
 Det with a sampled function returns another function?
 
+Allow Vector{Sample} to be passed into deterministic function
+
 Optimization:
   Collapse deterministic functions?
   Dynamic dependency graph?
