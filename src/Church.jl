@@ -133,6 +133,7 @@ value(s::Sample) = s.value
 value(det::Det) = 
     value(det.f)(map(value, det.args)...)
 value(g::GetIndex) = begin
+    #Should stop previous arg from being dependent.
     res = g.struct[map(value, g.args)...]
     #Add g as a dependent of struct [arg]
     add_dep(g, res)
@@ -142,7 +143,7 @@ value(s) = s
 
 #Don't care whether cdf or pdf is needed.
 logp(d::ContinuousDistribution, x) = logpdf(d, x)
-logp(d::DiscreteDistribution, x) = logpmf(d, x)
+logp(d::DiscreteDistribution, x) = logpdf(d, x)
 
 #Find dependents
 deps_inner(_, s::Sample, deps::Vector{Sample}) = begin
@@ -180,10 +181,10 @@ resample_inner(s::Sample) = begin
     deps = Sample[]
     deps_recurse(s, deps)
     (s.value, old_logp, new_logp) = propose(s.dist, old_val, s.sampler)
-    old_logp += mapreduce(dep->dep.logp, +, deps)
+    old_logp += length(deps) == 0 ? 0. : mapreduce(dep->dep.logp, +, deps)
     new_dists = map(s -> value(s.det), deps)
     new_logps = map((d, s) -> logp(d, s.value), new_dists, deps)
-    new_logp += sum(new_logps)
+    new_logp += length(new_logps) == 0 ? 0. : sum(new_logps)
     if !(exp(new_logp - old_logp) > rand())
         #Reject change
         s.value = old_val

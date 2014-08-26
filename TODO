@@ -1,29 +1,23 @@
-Convergence diagnostics
+Structural:
+  HMC using reversediff.
+    How?
+    Construct dict of values for continuous variables --- hashtable going from RV object id to call.
+  Particle Gibbs annealing.
+
+Convergence diagnostics:
   trace plot
   autocorrelation
   histogram
   implementation
-    requires a facility for recording samples
-    macro?
-
-Samplers
-  slice
-  multiple variable proposals
-  gradient
-
-Det with a sampled function returns another function?
-
-Allow Vector{Sample} to be passed into deterministic function
+    @samples(1000, :a, :b, :c)
 
 Optimization:
   Collapse deterministic functions?
-  Dynamic dependency graph?
-    Every node has:
-      static_deps
-      dynamic_deps
+  Use deterministic functions from numeric_extensions for speed?  (No function lookup).
 
 Extend libraries:
   Vectors:
     IID(dist, dims)
     Joint(dist1, dist2...)
     Joint(dists)
+  When lifting functions, allow Array{Sample} to be passed into deterministic function
